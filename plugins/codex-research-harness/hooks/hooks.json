@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/context_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\context_hook.py\"",
+            "timeout": 15,
+            "statusMessage": "Restoring research context"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/context_hook.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\context_hook.py\"",
+            "timeout": 15,
+            "statusMessage": "Checking recovery checkpoint"
+          }
+        ]
+      }
+    ]
+  }
+}

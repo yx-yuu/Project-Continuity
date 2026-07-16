@@ -1,0 +1,32 @@
+{
+  "name": "codex-research-harness",
+  "version": "0.4.0+codex.20260714182744",
+  "description": "Maintain a lightweight, recoverable project control plane for a single research project.",
+  "author": {
+    "name": "YYX"
+  },
+  "license": "MIT",
+  "keywords": [
+    "research",
+    "context",
+    "lifecycle",
+    "recovery"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Research Harness",
+    "shortDescription": "Lightweight project controls for research work.",
+    "longDescription": "Keeps one research project's definitions, constraints, state, evidence relationships, task boundaries, file changes, and cross-session recovery current while routing detailed domain procedures to on-demand skills.",
+    "developerName": "YYX",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Initialize the lightweight control plane for this research project.",
+      "Apply current project constraints and reconcile affected evidence after a task.",
+      "Resume a controlled task after compaction without loading historical noise."
+    ]
+  }
+}

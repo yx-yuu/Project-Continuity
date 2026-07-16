@@ -1,0 +1,20 @@
+{
+  "name": "personal",
+  "interface": {
+    "displayName": "Personal"
+  },
+  "plugins": [
+    {
+      "name": "codex-research-harness",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-research-harness"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

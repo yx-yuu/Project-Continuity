@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Harness"
+  short_description: "Control research project context and constraints"
+  default_prompt: "Use $research-harness to restore this project, apply its constraints, and reconcile task impacts."
