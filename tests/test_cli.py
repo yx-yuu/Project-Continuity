@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,15 @@ TEMPLATE_ROOT = PLUGIN_ROOT / "assets" / "project-template"
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from harness_core import PROTOCOL_VERSION, initialize_project  # noqa: E402
+
+
+def cli_command(*arguments: str) -> list[str]:
+    """Build a command that invokes the platform-native CLI wrapper."""
+    if sys.platform == "win32":
+        launcher = REPOSITORY_ROOT / "bin" / "research-harness.cmd"
+        return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", str(launcher), *arguments]
+    launcher = REPOSITORY_ROOT / "bin" / "research-harness"
+    return [str(launcher), *arguments]
 
 
 class ResearchHarnessTests(unittest.TestCase):
@@ -101,13 +111,13 @@ class ResearchHarnessTests(unittest.TestCase):
 
     def test_cli_only_exposes_init(self) -> None:
         version = subprocess.run(
-            [str(REPOSITORY_ROOT / "bin" / "research-harness"), "--version"],
+            cli_command("--version"),
             check=True,
             capture_output=True,
             text=True,
         )
         removed = subprocess.run(
-            [str(REPOSITORY_ROOT / "bin" / "research-harness"), "sync", str(self.root)],
+            cli_command("sync", str(self.root)),
             check=False,
             capture_output=True,
             text=True,
@@ -119,7 +129,7 @@ class ResearchHarnessTests(unittest.TestCase):
 
     def test_cli_init_emits_json(self) -> None:
         completed = subprocess.run(
-            [str(REPOSITORY_ROOT / "bin" / "research-harness"), "init", str(self.root), "--json"],
+            cli_command("init", str(self.root), "--json"),
             check=True,
             capture_output=True,
             text=True,
