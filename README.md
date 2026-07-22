@@ -1,92 +1,103 @@
 # Research Harness
 
-一套面向单个科研项目、可供不同 coding agent 共用的轻量项目控制协议。它维护当前研究定义、项目级约束、当前状态、必要决策、证据关系、任务边界和变更影响，并让 compact 或新会话能够从固定入口恢复。
+一套由 AI agent 维护的轻量科研项目协议。它让不同 coding agent 从固定入口理解当前研究问题、稳定约束、目录职责、项目状态和未完成任务，但不建立文件数据库，不扫描数据集，也不编排具体研究步骤。
 
-它不会为所有项目预装同一套文献、方法、实验或审稿流程。具体任务由用户和按需 skill 执行，但必须服从 harness 管理的项目约束、证据门禁、范围、完成条件和验证边界。
+Research Harness 的核心是项目内少量 Markdown 文件。CLI 只负责幂等安装和刷新协议；之后的阅读、判断、验证与维护由 agent 完成。
 
 ## 快速开始
 
+不安装全局命令时：
+
 ```bash
-cd /path/to/research-harness
-
-# 只读查看候选结构
-./bin/research-harness scan /path/to/project
-
-# 初始化或迁移项目控制面
-./bin/research-harness init /path/to/project
-
-# 检查外部文件变化
-./bin/research-harness sync /path/to/project
-
-# 完成影响审查和上下文更新后接受新基线
-./bin/research-harness sync /path/to/project --accept
-
-# compact 或新会话后恢复
-./bin/research-harness resume /path/to/project
-
-# 检查结构、项目就绪状态、任务契约和恢复预算
-./bin/research-harness doctor /path/to/project
+cd /path/to/project
+uvx --from git+https://github.com/yx-yuu/research-harness.git research-harness init .
 ```
+
+长期使用：
+
+```bash
+uv tool install git+https://github.com/yx-yuu/research-harness.git
+# 或：pipx install git+https://github.com/yx-yuu/research-harness.git
+research-harness init /path/to/project
+```
+
+随后在项目中告诉 agent：
+
+```text
+使用 research-harness 接管当前项目。
+```
+
+Agent 会阅读现有项目材料，确认当前研究定义和目录职责，只在研究含义或稳定约束确实需要选择时提问。用户不需要维护文件清单、运行同步命令或手工填写模板。
 
 ## 项目结构
 
 ```text
 project/
 ├── AGENTS.md
-├── CLAUDE.md              # 导入 AGENTS.md，不复制协议
-├── .research-harness.json
-├── .research-harness/
-│   └── snapshot.json      # 文件增量基线，不进入默认上下文
+├── CLAUDE.md                 # Claude Code 导入 AGENTS.md 的适配
 └── agent-docs/
-    ├── index.md
-    ├── project.md
-    ├── state.md
-    ├── decisions.md
-    └── checkpoint.md      # 仅在受控任务存在时创建
+    ├── project.md            # 当前研究定义、约束和目录职责
+    ├── state.md              # 当前阶段、焦点、下一步和阻塞
+    ├── checkpoint.md         # 仅在一个跨阶段写任务存在时创建
+    └── decisions.md          # 仅在关键决定必须长期记住时创建
 ```
 
-## 单一任务契约与 checkpoint
+默认只创建 `project.md` 和 `state.md`。checkpoint 与 decisions 均由 agent 按需创建，完成或失效后删除。
 
-关键、长程、跨阶段或需要跨会话恢复的任务使用一个可覆盖 checkpoint：
+## 工作方式
+
+### 接管项目
+
+Agent 读取现有 README、研究说明、主要目录、代码/实验/结果/论文入口，将稳定信息整理到 `project.md`，将当前进展整理到 `state.md`。目录表只记录职责和变化时需要检查的对象，不枚举目录中的文件。
+
+### 执行任务
+
+具体的代码、实验、统计、论文和审稿流程由 agent 或按需 skill 决定。harness 只要求它们服从当前约束、证据门禁、任务范围和完成条件。
+
+关键、长程或跨阶段任务使用一个可覆盖的 `checkpoint.md`；小型局部任务不创建。一个 worktree 同时只允许一个活动写任务，新写任务不能静默覆盖旧 checkpoint。
+
+### 完成任务
+
+Agent 使用 Git、测试、实验工具或其他领域工具直接检查实际变化和结果，识别受影响目录及下游对象，随后更新当前项目定义或状态。harness 不保存文件快照，也没有 `sync --accept` 之类的第二套文件真相。
+
+## CLI
+
+CLI 只保留初始化命令：
 
 ```bash
-./bin/research-harness checkpoint save --path /path/to/project \
-  --goal "当前要完成的结果" \
-  --scope "允许修改的范围和明确非目标" \
-  --done "可以核验的完成条件" \
-  --validation "与风险匹配的检查及预算" \
-  --impact "可能受影响的代码、实验、结果或论文对象" \
-  --current "已经核验的进展" \
-  --next "下一步唯一动作" \
-  --fact "已确认事实" \
-  --decision "用户决定" \
-  --risk "尚未解决的风险" \
-  --ref "src/current.py"
+# 预览会触及的协议文件
+research-harness init /path/to/project --dry-run
+
+# 安装或刷新协议
+research-harness init /path/to/project
+
+# 查看版本
+research-harness --version
 ```
 
-每次保存覆盖旧内容，不形成任务历史。存在未确认文件变化时，普通 `checkpoint clear` 会拒绝清理；完成影响审查和 `sync --accept` 后再清理。只有明确放弃任务时才使用 `--force`。
+`init` 只维护 `AGENTS.md`、`CLAUDE.md` 的受管理区块，并在缺失时创建 `project.md`、`state.md`。它不会扫描、移动或删除其他项目文件，不执行 commit、branch、stash 等 Git 操作，也不生成 manifest 或 snapshot。
 
-## 控制边界
+## 旧版本迁移
 
-- harness 管理：当前项目定义与约束、状态、证据来源、任务边界、变更影响、恢复与信息生命周期。
-- 按需 skill 管理：文献检索、方法设计、编码、实验、统计和审稿的具体执行步骤。
-- task skill 不得绕过：项目约束、证据门禁、完成条件、验证边界和当前权威来源。
-- 自动扫描、compact 摘要、模型推断和任务输出始终只是 candidate。
-- 同一对象只保留一个当前权威来源；默认不保存任务 archive。
-- `doctor` 同时检查默认恢复包总字节预算，避免通过长单行或多个核心文件绕过行数限制。
+升级本机 CLI 后，在每个项目重新运行一次 `init`：
+
+```bash
+uv tool upgrade research-harness
+research-harness init /path/to/project
+```
+
+旧版 `.research-harness.json`、`.research-harness/` 和 `agent-docs/index.md` 会被报告为审查候选，但不会自动删除。让 agent 先提取仍有效的信息，再使用可恢复方式清理。
 
 ## Agent 适配
 
-`init` 在 `AGENTS.md` 中维护共享控制协议，并在 `CLAUDE.md` 中写入 `@AGENTS.md`。Codex 读取前者，Claude Code 按[官方 import 机制](https://code.claude.com/docs/en/memory#agents-md)读取同一内容；两个入口都会保留原有用户规则。
-
-### Codex
+Codex 插件只提供按需加载的 skill，不运行 hook 或后台任务：
 
 ```bash
 codex plugin marketplace add /path/to/research-harness
 codex plugin add codex-research-harness@personal
 ```
 
-### Claude Code
+Claude Code 可直接使用项目中的 `CLAUDE.md`，也可安装同一 skill：
 
 ```bash
 mkdir -p ~/.claude/skills
@@ -94,6 +105,12 @@ ln -s /path/to/research-harness/plugins/codex-research-harness/skills/research-h
   ~/.claude/skills/research-harness
 ```
 
-如果希望在 harness 项目中完全关闭 Claude auto memory，可在项目 `.claude/settings.json` 设置 `"autoMemoryEnabled": false`。
+## 维护与发布
 
-协议版本：`0.4.0`。
+```bash
+python3 -m unittest discover -s tests -v
+uv build
+python3 scripts/build_zipapp.py
+```
+
+核心 CLI 只依赖 Python 标准库。协议版本：`0.6.0`。

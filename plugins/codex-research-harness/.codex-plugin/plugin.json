@@ -1,7 +1,7 @@
 {
   "name": "codex-research-harness",
-  "version": "0.4.0+codex.20260714182744",
-  "description": "Maintain a lightweight, recoverable project control plane for a single research project.",
+  "version": "0.6.0+codex.20260722093817",
+  "description": "Maintain a lightweight, agent-driven protocol for a single research project.",
   "author": {
     "name": "YYX"
   },
@@ -16,7 +16,7 @@
   "interface": {
     "displayName": "Research Harness",
     "shortDescription": "Lightweight project controls for research work.",
-    "longDescription": "Keeps one research project's definitions, constraints, state, evidence relationships, task boundaries, file changes, and cross-session recovery current while routing detailed domain procedures to on-demand skills.",
+    "longDescription": "Keeps one research project's intent, stable constraints, directory responsibilities, current state, and one optional task contract recoverable while leaving repository inspection and research procedures to the agent.",
     "developerName": "YYX",
     "category": "Productivity",
     "capabilities": [
@@ -24,9 +24,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Initialize the lightweight control plane for this research project.",
-      "Apply current project constraints and reconcile affected evidence after a task.",
-      "Resume a controlled task after compaction without loading historical noise."
+      "Adopt this research project and establish its current constraints and directory responsibilities.",
+      "Restore the current project context and continue its active task.",
+      "Reconcile verified task impacts without creating file inventories or task history."
     ]
   }
 }

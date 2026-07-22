@@ -1,77 +1,52 @@
 ---
 name: research-harness
-description: Maintain a lightweight project control plane for one research project. Use when initializing or migrating a project; starting, resuming, or completing a critical, long-running, or cross-stage task; applying project constraints; detecting external file changes; promoting evidence into current facts; propagating changes across methods, code, experiments, results, and paper; removing stale context; or auditing control-plane health. Use task-specific skills for domain procedures, but keep their execution subject to project constraints, evidence gates, task boundaries, and completion conditions managed here.
+description: Maintain a lightweight, agent-driven control plane for one research project. Use when adopting or refreshing a project; restoring current context; applying project constraints and directory responsibilities; starting, switching, resuming, or completing a critical or cross-stage task; reconciling verified changes across methods, experiments, results, and paper; or removing stale project context. Keep file discovery, Git inspection, validation, and domain work under agent judgment rather than a harness file tracker.
 ---
 
 # Research Harness
 
-Keep one research project's definitions, constraints, state, evidence relationships, task boundaries, and change impacts current and recoverable. Do not preload one universal domain workflow into every project.
+Maintain current project intent, stable constraints, directory responsibilities, current state, and one optional task contract. Let the active agent inspect the real project and choose task procedures; do not build a parallel file inventory, snapshot, or task database.
+
+## Adopt A Project
+
+1. Run `research-harness init <root> --dry-run --json`, inspect the small set of protocol files it will touch, then run `research-harness init <root>`.
+2. Read existing instructions, README files, current-status material, top-level directories, code/config entrypoints, experiment outputs, and paper sources relevant to understanding the project. Use Git or other repository tools when useful; do not enumerate large datasets or generated trees merely to populate harness documents.
+3. Reconcile stable, confirmed information into `agent-docs/project.md` and the current focus into `state.md`. Record directory responsibilities and downstream checks at directory granularity.
+4. Preserve existing material and user rules. Treat inferred research meaning as candidate and ask only questions that materially change the project definition or constraints.
+5. Review legacy files reported by `init`. Extract still-current information before removing obsolete control files with a recoverable deletion mechanism.
+6. Report the current authorities, unresolved user decisions, and whether the project is ready.
 
 ## Restore Context
 
-1. Locate `.research-harness.json` from the current directory upward.
-2. Run the bundled `python3 <skill-dir>/scripts/harness.py resume <root>`.
-3. Read the active agent entrypoint (`AGENTS.md`, or `CLAUDE.md` which imports it), `agent-docs/index.md`, `project.md`, `state.md`, and an existing `checkpoint.md`.
-4. Follow `index.md` only to currently registered sources relevant to the user's task.
-5. Treat compact summaries and unregistered files as hints, not authority.
+1. Locate the nearest project `AGENTS.md` containing the Research Harness managed block.
+2. Read `AGENTS.md`, `agent-docs/project.md`, and `state.md`. Read `checkpoint.md` only when it exists; read `decisions.md` only when a current decision is relevant.
+3. Follow the directory responsibilities in `project.md` to inspect only sources relevant to the request.
+4. Treat conversation summaries, unverified outputs, and old documents as hints rather than current authority.
 
-If the project is not initialized and the user asks to initialize it, run `scan` first and then `init`. Scanning never promotes files into project facts.
+## Control One Task
 
-## Establish Task Control
+Allow only one active mutating task per worktree.
 
-For a critical, long-running, cross-stage, or compact-sensitive task, keep one replaceable task contract:
+- If an existing checkpoint matches the request, update it in place and continue.
+- If a new request is read-only, handle it without replacing the active checkpoint.
+- If a new mutating request differs from the active checkpoint, report the conflict before writing. Finish or abandon the old task, or use a separate worktree; never silently overwrite or mix task contracts.
 
-```bash
-python3 <skill-dir>/scripts/harness.py checkpoint save --path <root> \
-  --goal "required outcome" --scope "in scope and out of scope" \
-  --done "observable completion conditions" \
-  --validation "risk-matched checks and budget" \
-  --impact "expected downstream object" \
-  --current "verified progress" --next "one next action"
-```
+For a critical, long-running, cross-stage, or compact-sensitive task, create or replace `agent-docs/checkpoint.md` directly with: goal, scope, done conditions, validation boundary, expected impacts, verified progress, facts, decisions, risks, necessary references, and one next action. Do not create a checkpoint for a small local task.
 
-Do not create a checkpoint for a small local task that does not need recovery or cross-stage control. A task-specific skill may choose the procedure, but it cannot override the current project constraints, evidence gates, scope, or done conditions.
+## Reconcile Work
 
-## Reconcile Changes
-
-After a task, rule change, or manual file import:
-
-1. Run `python3 <skill-dir>/scripts/harness.py sync <root>` to see filesystem candidates.
-2. Identify which definitions, constraints, evidence, results, paper claims, or other downstream objects are affected.
-3. Verify the task contract and project gates, then replace outdated information at its single authoritative location. Do not append a history log.
-4. Use `trash` for obsolete material with no reproduction, audit, compliance, or recovery value.
-5. Register only confirmed, current sources in `index.md`.
-6. Run `sync --accept` only after impact review and context reconciliation.
-7. Run `doctor`, address relevant control or budget warnings, then clear the checkpoint. Clearing refuses pending changes unless explicitly forced for an abandoned task.
-
-Read [lifecycle.md](references/lifecycle.md) when migrating v0.1, changing durable rules, or deciding whether to replace, delete, or keep information outside the active context.
-
-## Survive Compaction
-
-For work that must continue across a session or compact boundary, keep one checkpoint:
-
-```bash
-python3 <skill-dir>/scripts/harness.py checkpoint save --path <root> \
-  --goal "current outcome" --scope "current task boundary" \
-  --done "observable completion conditions" --validation "necessary checks" \
-  --current "verified progress" --next "one next action"
-```
-
-Each save replaces the prior checkpoint. Record only confirmed facts, user decisions, unresolved risks, necessary references, and the next action. Clear it when recovery is no longer needed:
-
-```bash
-python3 <skill-dir>/scripts/harness.py checkpoint clear --path <root>
-```
-
-Agent adapters may remind the active coding agent to restore context at session start and to checkpoint before compaction. Hooks do not infer or write research facts.
+1. Inspect actual changes with the tools appropriate to the repository and task. Use Git status/diff when available, but do not rely on harness-maintained file state.
+2. Verify the task's done conditions, project constraints, and evidence gates. Identify affected directories and downstream research objects.
+3. Replace outdated current information at its authoritative source. Update `project.md` only for durable definitions, constraints, or directory responsibilities; update `state.md` when the current phase, focus, blocker, or next step changes.
+4. Create `decisions.md` only when forgetting a decision would likely cause repeated error. Keep the current decision, minimum reason, and invalidation condition.
+5. Remove the completed checkpoint with a recoverable deletion mechanism after verifying the work and its impacts. Keep no task archive by default.
 
 ## Keep It Light
 
-- Maintain one current version, not a timeline.
-- Link to canonical sources instead of copying their contents.
-- Keep no task archive by default.
-- Delete `bootstrap.md` and old task documents after migration review.
-- Do not create new harness documents when an existing authority can be updated.
-- Keep detailed domain procedures in optional skills; keep project-specific constraints and gates in the control plane.
+- Maintain current information, not a timeline.
+- Track directory responsibilities, not file inventories.
+- Link to canonical research sources instead of copying them.
+- Keep detailed domain procedures in optional skills.
+- Do not add runtime automation, background scanning, task queues, or extra control documents.
 
-Read [protocol.md](references/protocol.md) before changing core file responsibilities or budgets.
+Read [protocol.md](references/protocol.md) before changing durable responsibilities. Read [lifecycle.md](references/lifecycle.md) when migrating an older project or deciding whether to replace, retain, or delete context.

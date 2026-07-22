@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build Python distributions
+        run: uv build
+      - name: Build standalone zipapp
+        run: python scripts/build_zipapp.py
+      - name: Generate checksums
+        run: cd dist && sha256sum research_harness-* research-harness.pyz > SHA256SUMS
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/research_harness-*
+            dist/research-harness.pyz
+            dist/SHA256SUMS
