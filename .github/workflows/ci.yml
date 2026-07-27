@@ -47,5 +47,7 @@ jobs:
           "$RUNNER_TEMP/project-continuity-wheel/bin/python" -m pip install --no-deps dist/project_continuity-*.whl
           target="$(mktemp -d)"
           "$RUNNER_TEMP/project-continuity-wheel/bin/project-continuity" init "$target" --json
+          "$RUNNER_TEMP/project-continuity-wheel/bin/project-continuity" init "$target" --json > "$RUNNER_TEMP/project-continuity-refresh.json"
+          python -c 'import json,sys; sys.exit(bool(json.load(open(sys.argv[1], encoding="utf-8"))["planned"]))' "$RUNNER_TEMP/project-continuity-refresh.json"
           test -f "$target/agent-docs/project.md"
           test -f "$target/agent-docs/state.md"

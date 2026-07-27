@@ -80,14 +80,18 @@ def _append_block(text: str, block: str, newline: str) -> str:
 
 
 def _template(name: str, **values: str) -> str:
-    path = TEMPLATE_ROOT / name
-    if path.is_file():
-        text = _read_text(path)
-    else:
+    if __package__:
         try:
-            text = resources.files("project_continuity.templates").joinpath(name).read_text(encoding="utf-8")
+            text = resources.files(f"{__package__}.templates").joinpath(name).read_text(
+                encoding="utf-8"
+            )
         except (ModuleNotFoundError, FileNotFoundError) as exc:
             raise FileNotFoundError(f"缺少模板: {name}") from exc
+    else:
+        path = TEMPLATE_ROOT / name
+        if not path.is_file():
+            raise FileNotFoundError(f"缺少模板: {name}")
+        text = _read_text(path)
     rendered = Template(text).safe_substitute(values)
     return _with_newlines(rendered, "\n").rstrip() + "\n"
 
@@ -114,58 +118,147 @@ def _opening_fence_token(line: str) -> tuple[str, int, str] | None:
     return token
 
 
+def _starts_html_comment_block(line: str) -> bool:
+    stripped = line.lstrip(" ")
+    return len(line) - len(stripped) <= 3 and stripped.startswith("<!--")
+
+
 def _unfenced_lines(text: str) -> Iterator[tuple[int, str]]:
     fence_marker: str | None = None
     fence_length = 0
+    in_html_comment = False
     offset = 0
     for raw_line in text.splitlines(keepends=True):
         line = raw_line.rstrip("\r\n")
         fence_line = line.removeprefix("\ufeff") if offset == 0 else line
-        token = (
-            _fence_token(fence_line)
-            if fence_marker is not None
-            else _opening_fence_token(fence_line)
-        )
-        if fence_marker is None:
+        if fence_marker is not None:
+            token = _fence_token(fence_line)
+            if (
+                token is not None
+                and token[0] == fence_marker
+                and token[1] >= fence_length
+                and not token[2].strip()
+            ):
+                fence_marker = None
+                fence_length = 0
+        elif in_html_comment:
+            _, in_html_comment = _without_html_comments(fence_line, in_html_comment)
+        else:
+            token = _opening_fence_token(fence_line)
             if token is not None:
                 fence_marker, fence_length, _ = token
             else:
                 leading_spaces = len(line) - len(line.lstrip(" "))
                 if not line.startswith("\t") and leading_spaces <= 3:
                     yield offset, line
-        elif (
-            token is not None
-            and token[0] == fence_marker
-            and token[1] >= fence_length
-            and not token[2].strip()
-        ):
-            fence_marker = None
-            fence_length = 0
+                if _starts_html_comment_block(fence_line):
+                    _, in_html_comment = _without_html_comments(fence_line, in_html_comment)
         offset += len(raw_line)
 
 
-def _has_unclosed_fence(text: str) -> bool:
+def _without_html_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    parts = []
+    cursor = 0
+    while cursor < len(line):
+        if in_comment:
+            end = line.find("-->", cursor)
+            if end == -1:
+                return "".join(parts), True
+            cursor = end + 3
+            in_comment = False
+            continue
+        start = line.find("<!--", cursor)
+        if start == -1:
+            parts.append(line[cursor:])
+            break
+        parts.append(line[cursor:start])
+        cursor = start + 4
+        in_comment = True
+    return "".join(parts), in_comment
+
+
+def _without_complete_html_comments(line: str) -> str:
+    parts = []
+    cursor = 0
+    while cursor < len(line):
+        start = line.find("<!--", cursor)
+        if start == -1:
+            parts.append(line[cursor:])
+            break
+        end = line.find("-->", start + 4)
+        if end == -1:
+            parts.append(line[cursor:])
+            break
+        parts.append(line[cursor:start])
+        cursor = end + 3
+    return "".join(parts)
+
+
+def _active_markdown_lines(text: str) -> Iterator[str]:
     fence_marker: str | None = None
     fence_length = 0
+    in_html_comment = False
     for index, raw_line in enumerate(text.splitlines()):
-        fence_line = raw_line.removeprefix("\ufeff") if index == 0 else raw_line
-        token = (
-            _fence_token(fence_line)
-            if fence_marker is not None
-            else _opening_fence_token(fence_line)
-        )
-        if fence_marker is None:
+        line = raw_line.removeprefix("\ufeff") if index == 0 else raw_line
+        if fence_marker is not None:
+            token = _fence_token(line)
+            if (
+                token is not None
+                and token[0] == fence_marker
+                and token[1] >= fence_length
+                and not token[2].strip()
+            ):
+                fence_marker = None
+                fence_length = 0
+            continue
+
+        if not in_html_comment:
+            token = _opening_fence_token(line)
             if token is not None:
                 fence_marker, fence_length, _ = token
-        elif (
-            token is not None
-            and token[0] == fence_marker
-            and token[1] >= fence_length
-            and not token[2].strip()
-        ):
-            fence_marker = None
-            fence_length = 0
-    return fence_marker is not None
+                continue
+            leading_spaces = len(line) - len(line.lstrip(" "))
+            if line.startswith("\t") or leading_spaces > 3:
+                continue
+
+        if in_html_comment or _starts_html_comment_block(line):
+            active, in_html_comment = _without_html_comments(line, in_html_comment)
+        else:
+            active = _without_complete_html_comments(line)
+        yield active
+
+
+def _unclosed_markdown_construct(text: str) -> str | None:
+    fence_marker: str | None = None
+    fence_length = 0
+    in_html_comment = False
+    for index, raw_line in enumerate(text.splitlines()):
+        fence_line = raw_line.removeprefix("\ufeff") if index == 0 else raw_line
+        if fence_marker is not None:
+            token = _fence_token(fence_line)
+            if (
+                token is not None
+                and token[0] == fence_marker
+                and token[1] >= fence_length
+                and not token[2].strip()
+            ):
+                fence_marker = None
+                fence_length = 0
+            continue
+        if in_html_comment:
+            _, in_html_comment = _without_html_comments(fence_line, in_html_comment)
+            continue
+        token = _opening_fence_token(fence_line)
+        if token is not None:
+            fence_marker, fence_length, _ = token
+            continue
+        if _starts_html_comment_block(fence_line):
+            _, in_html_comment = _without_html_comments(fence_line, in_html_comment)
+    if fence_marker is not None:
+        return "fence"
+    if in_html_comment:
+        return "html-comment"
+    return None
 
 
 def _standalone_marker_spans(text: str, marker: str) -> list[tuple[int, int]]:
@@ -199,18 +292,18 @@ def _managed_section_span(text: str, name: str) -> tuple[int, int] | None:
     return _namespace_span(text, CURRENT_MARKER_NAMESPACE, name)
 
 
-def _validate_managed_file(path: Path, name: str) -> None:
-    if path.is_file():
-        text = _read_text(path)
-        if _has_unclosed_fence(text):
-            raise ValueError(f"{path.name} 存在未闭合的 Markdown 代码块，请先人工检查")
+def _validate_managed_text(path: Path, text: str | None, name: str) -> None:
+    if text is not None:
+        _validate_markdown_constructs(path, text)
         _managed_section_span(text, name)
 
 
-def _has_managed_section(path: Path, name: str) -> bool:
-    if not path.is_file():
-        return False
-    return _managed_section_span(_read_text(path), name) is not None
+def _validate_markdown_constructs(path: Path, text: str) -> None:
+    unclosed = _unclosed_markdown_construct(text)
+    if unclosed == "fence":
+        raise ValueError(f"{path.name} 存在未闭合的 Markdown 代码块，请先人工检查")
+    if unclosed == "html-comment":
+        raise ValueError(f"{path.name} 存在未闭合的 Markdown HTML 注释，请先人工检查")
 
 
 def _upsert_managed_section_text(
@@ -237,7 +330,7 @@ def _upsert_managed_section_text(
 
 
 def _has_active_claude_import(text: str) -> bool:
-    for _, line in _unfenced_lines(text):
+    for line in _active_markdown_lines(text):
         if line.strip() == "@AGENTS.md":
             return True
     return False
@@ -261,10 +354,32 @@ def _claude_adapter_text(existing: str | None, body: str) -> str:
 
 
 def _has_markdown_heading(text: str, heading: str) -> bool:
-    for _, line in _unfenced_lines(text):
-        if line.strip() == heading:
+    expected = _atx_heading(heading)
+    if expected is None:
+        raise ValueError(f"无效的 Markdown 标题: {heading}")
+    for line in _active_markdown_lines(text):
+        if _atx_heading(line) == expected:
             return True
     return False
+
+
+def _atx_heading(line: str) -> tuple[int, str] | None:
+    stripped = line.lstrip(" ")
+    if len(line) - len(stripped) > 3 or not stripped.startswith("#"):
+        return None
+    level = len(stripped) - len(stripped.lstrip("#"))
+    if level > 6:
+        return None
+    remainder = stripped[level:]
+    if remainder and remainder[0] not in " \t":
+        return None
+    content = remainder.strip(" \t")
+    closing_start = len(content.rstrip("#"))
+    if closing_start < len(content) and (
+        closing_start == 0 or content[closing_start - 1] in " \t"
+    ):
+        content = content[:closing_start].rstrip(" \t")
+    return level, content
 
 
 def _project_with_missing_sections(text: str, rules: str, structure: str) -> str:
@@ -456,11 +571,6 @@ def _validate_control_paths(root: Path) -> Path:
         if path.exists() and not path.is_file():
             raise ValueError(f"控制文档路径必须是文件: {path}")
 
-    project = docs / "project.md"
-    if project.is_file():
-        text = _read_text(project)
-        if _has_unclosed_fence(text):
-            raise ValueError(f"{project.name} 存在未闭合的 Markdown 代码块，请先人工检查")
     return docs
 
 
@@ -498,14 +608,6 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
 
     for attempt in range(MAX_CONCURRENT_RETRIES):
         docs = _validate_control_paths(root)
-        _validate_managed_file(root / "AGENTS.md", "protocol")
-        _validate_managed_file(root / "CLAUDE.md", "claude-adapter")
-        existing_agent_docs = sorted(path.name for path in docs.glob("*.md")) if docs.is_dir() else []
-        mode = "refresh" if _has_managed_section(root / "AGENTS.md", "protocol") else "initialize"
-        if initial_mode is None:
-            initial_mode = mode
-            initial_agent_docs = existing_agent_docs
-
         agents_path = root / "AGENTS.md"
         claude_path = root / "CLAUDE.md"
         project_path = docs / "project.md"
@@ -514,6 +616,23 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
             path: _current_control_text(path)
             for _, path in relative_paths
         }
+        _validate_managed_text(agents_path, existing_contents[agents_path], "protocol")
+        _validate_managed_text(claude_path, existing_contents[claude_path], "claude-adapter")
+        project_text = existing_contents[project_path]
+        if project_text is not None:
+            _validate_markdown_constructs(project_path, project_text)
+
+        existing_agent_docs = sorted(path.name for path in docs.glob("*.md")) if docs.is_dir() else []
+        mode = (
+            "refresh"
+            if existing_contents[agents_path] is not None
+            and _managed_section_span(existing_contents[agents_path], "protocol") is not None
+            else "initialize"
+        )
+        if initial_mode is None:
+            initial_mode = mode
+            initial_agent_docs = existing_agent_docs
+
         final_contents = {
             agents_path: _upsert_managed_section_text(
                 existing_contents[agents_path],

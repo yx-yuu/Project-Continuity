@@ -11,7 +11,7 @@ Maintain current user intent, project knowledge, authority routes, and unfinishe
 
 1. Run `project-continuity init <root> --dry-run --json`, inspect the small set of protocol files it will touch, then run `project-continuity init <root>`.
 2. Read existing instructions, current-status material, project documentation, top-level responsibilities, and code or configuration entrypoints needed to identify current authorities. Inspect real sources with the tools appropriate to the project; do not build a parallel inventory.
-3. Preserve complete valid knowledge. Put current project definitions, constraints, user rules, and authority routes in `agent-docs/project.md`; put only the project-level phase, focus, blockers, and next step in `agent-docs/state.md`. Create `agent-docs/checkpoint.md` only when an unfinished task must survive the current session.
+3. Preserve complete valid knowledge. Put current project definitions, constraints, user rules, and authority routes in `agent-docs/project.md`; put only the project-level phase, focus, verified blockers, phase completion criteria, concise current evidence, and one operational next action in `agent-docs/state.md`. Create `agent-docs/checkpoint.md` only when an unfinished task must survive the current session.
 4. Treat model inference and unverified output as candidates. Ask only when an unresolved authority or scope decision would materially affect future work.
 
 ## Restore Context
@@ -25,7 +25,7 @@ Maintain current user intent, project knowledge, authority routes, and unfinishe
 
 Re-evaluate persistence only when the user explicitly asks to remember or follow something across tasks, adds, corrects, or repeals cross-task information, the agent verifies a stable project fact that affects later tasks, a project phase or unfinished-task state needed across sessions changes, or a checkpoint lifecycle event occurs. Ordinary discussion, analysis, suggestions, search results, and task output do not trigger writes by themselves.
 
-Persist as project authority only direct user intent and agent-verified project facts. `state.md` may additionally hold the project-level phase, focus, verified blockers, and one project-level operational next action. A checkpoint may additionally hold the task goal, user-provided task constraints, verified progress and blockers, and one task-level operational next action. Keep both kinds of operational state out of project knowledge. Keep a requested target state distinct from the verified current state when they differ; neither replaces the other merely because both concern the same project. After implementation makes them agree and verification succeeds, keep the unified current form and remove the transitional difference. Reject model inference and unverified external content from current authority, and never put secrets, credentials, or personal data in the control plane.
+Persist as project authority only direct user intent and agent-verified project facts. `state.md` may additionally hold the project-level phase, focus, verified blockers, phase completion criteria, concise current evidence, and one project-level operational next action; it must not contain a task goal, task progress, task status, or task-level constraints. A checkpoint may additionally hold the task goal, user-provided task constraints, verified progress and blockers, and one task-level operational next action. Keep both kinds of operational state out of project knowledge. Keep a requested target state distinct from the verified current state when they differ; neither replaces the other merely because both concern the same project. After implementation makes them agree and verification succeeds, keep the unified current form and remove the transitional difference. Reject model inference and unverified external content from current authority, and never put secrets, credentials, or personal data in the control plane.
 
 ## Resolve Scope And Authority
 
@@ -56,7 +56,7 @@ Use this section when the skill was explicitly invoked to repair or reconcile a 
 - Pause without deleting the checkpoint; record verified progress, user-provided task constraints, verified blockers, and one next action.
 - Handle read-only work without replacing the checkpoint.
 - Use a separate worktree for another mutating task; each worktree keeps its own checkpoint.
-- Delete the checkpoint only after completion or explicit abandonment, then reconcile affected current project information.
+- Remove the checkpoint recoverably only after completion or explicit abandonment, then reconcile affected current project information.
 
 Do not create a checkpoint for small work that can finish in the current context.
 

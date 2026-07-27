@@ -137,6 +137,28 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertEqual(result["planned"], [])
         self.assertNotIn(b"\r\n", (self.root / "AGENTS.md").read_bytes())
 
+    def test_installed_package_uses_its_own_template_resources(self) -> None:
+        neighboring_templates = self.root / "assets" / "project-template"
+        package_templates = self.root / "package-templates"
+        neighboring_templates.mkdir(parents=True)
+        package_templates.mkdir()
+        (neighboring_templates / "example.md").write_text("WRONG TEMPLATE\n", encoding="utf-8")
+        (package_templates / "example.md").write_text("PACKAGED $VALUE\n", encoding="utf-8")
+
+        with (
+            mock.patch.object(continuity_core, "__package__", "project_continuity"),
+            mock.patch.object(continuity_core, "TEMPLATE_ROOT", neighboring_templates),
+            mock.patch.object(
+                continuity_core.resources,
+                "files",
+                return_value=package_templates,
+            ) as resource_files,
+        ):
+            rendered = continuity_core._template("example.md", VALUE="TEMPLATE")
+
+        resource_files.assert_called_once_with("project_continuity.templates")
+        self.assertEqual(rendered, "PACKAGED TEMPLATE\n")
+
     def test_init_retries_against_latest_content_after_a_concurrent_change(self) -> None:
         agents = self.write("AGENTS.md", "# Existing agents\n\nORIGINAL USER CONTENT\n")
         real_atomic_write = continuity_core._atomic_write_texts
@@ -164,6 +186,30 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("CONCURRENT USER CONTENT", text)
         self.assertEqual(text.count("project-continuity:protocol:start"), 1)
         self.assertEqual(result["updated"], ["AGENTS.md"])
+
+    def test_init_validates_the_same_snapshot_used_for_planning(self) -> None:
+        agents = self.write("AGENTS.md", "# Existing agents\n")
+        real_current_text = continuity_core._current_control_text
+        injected = False
+
+        def inject_before_snapshot(path: Path) -> str | None:
+            nonlocal injected
+            if path == agents.resolve() and not injected:
+                injected = True
+                agents.write_text("# Existing agents\n\n```markdown\nunfinished\n", encoding="utf-8")
+            return real_current_text(path)
+
+        with mock.patch.object(
+            continuity_core,
+            "_current_control_text",
+            side_effect=inject_before_snapshot,
+        ):
+            with self.assertRaisesRegex(ValueError, "未闭合"):
+                initialize_project(self.root)
+
+        self.assertTrue(injected)
+        self.assertNotIn("project-continuity:protocol:start", agents.read_text(encoding="utf-8"))
+        self.assertFalse((self.root / "agent-docs").exists())
 
     def test_init_stops_after_repeated_concurrent_changes(self) -> None:
         self.write("AGENTS.md", "# Existing agents\n")
@@ -257,6 +303,30 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("project-continuity:claude-adapter:start", claude)
         self.assertIn("auto memory", claude)
 
+    def test_claude_import_ignores_html_comments_and_accepts_a_bom(self) -> None:
+        cases = {
+            "commented": "<!--\n@AGENTS.md\n-->\n",
+            "bom": "\ufeff@AGENTS.md\n",
+        }
+        for name, original in cases.items():
+            with self.subTest(name=name):
+                target = self.root / name
+                target.mkdir()
+                claude = target / "CLAUDE.md"
+                claude.write_text(original, encoding="utf-8")
+
+                initialize_project(target)
+                initialize_project(target)
+
+                text = claude.read_text(encoding="utf-8")
+                active_imports = [
+                    line
+                    for line in continuity_core._active_markdown_lines(text)
+                    if line.strip() == "@AGENTS.md"
+                ]
+                self.assertEqual(len(active_imports), 1)
+                self.assertEqual(text.count("@AGENTS.md"), 2 if name == "commented" else 1)
+
     def test_init_ignores_marker_examples_in_markdown_code(self) -> None:
         agents = self.write(
             "AGENTS.md",
@@ -334,6 +404,44 @@ class ProjectContinuityTests(unittest.TestCase):
             agents.read_text(encoding="utf-8"),
         )
 
+    def test_init_ignores_fence_examples_in_html_comments(self) -> None:
+        agents = self.write(
+            "AGENTS.md",
+            "# Existing\n\n<!--\n```markdown\nexample without a closing fence\n-->\n",
+        )
+
+        initialize_project(self.root)
+        result = initialize_project(self.root)
+
+        self.assertEqual(result["planned"], [])
+        self.assertIn(
+            "<!-- project-continuity:protocol:start -->",
+            agents.read_text(encoding="utf-8"),
+        )
+
+    def test_init_does_not_treat_an_inline_comment_token_as_an_unclosed_block(self) -> None:
+        agents = self.write(
+            "AGENTS.md",
+            "# Existing\n\nUse the inline code `<!--` to describe an HTML comment.\n",
+        )
+        claude = self.write(
+            "CLAUDE.md",
+            "# Existing\n\nUse the inline code `<!--` to describe an HTML comment.\n",
+        )
+        project = self.write(
+            "agent-docs/project.md",
+            "# Existing\n\nUse the inline code `<!--` to describe an HTML comment.\n",
+        )
+
+        initialize_project(self.root)
+        result = initialize_project(self.root)
+
+        self.assertEqual(result["planned"], [])
+        self.assertIn("`<!--`", agents.read_text(encoding="utf-8"))
+        self.assertEqual(claude.read_text(encoding="utf-8").count("@AGENTS.md"), 1)
+        self.assertEqual(project.read_text(encoding="utf-8").count("## 当前长期规则"), 1)
+        self.assertEqual(project.read_text(encoding="utf-8").count("## 项目结构与入口"), 1)
+
     def test_init_rejects_unclosed_fences_before_writing(self) -> None:
         cases = {
             "agents": ("AGENTS.md", "```markdown\nunfinished\n"),
@@ -357,6 +465,29 @@ class ProjectContinuityTests(unittest.TestCase):
                 if relative != "CLAUDE.md":
                     self.assertFalse((target / "CLAUDE.md").exists())
 
+    def test_init_rejects_unclosed_html_comments_before_writing(self) -> None:
+        cases = {
+            "agents": ("AGENTS.md", "# Existing\n\n<!-- unfinished\n"),
+            "claude": ("CLAUDE.md", "# Existing\n\n<!-- unfinished\n"),
+            "project": ("agent-docs/project.md", "# Project\n\n<!-- unfinished\n"),
+        }
+        for name, (relative, content) in cases.items():
+            with self.subTest(name=name):
+                target = self.root / f"unclosed-comment-{name}"
+                target.mkdir()
+                path = target / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+
+                with self.assertRaisesRegex(ValueError, "未闭合的 Markdown HTML 注释"):
+                    initialize_project(target)
+
+                self.assertFalse((target / "agent-docs" / "state.md").exists())
+                if relative != "AGENTS.md":
+                    self.assertFalse((target / "AGENTS.md").exists())
+                if relative != "CLAUDE.md":
+                    self.assertFalse((target / "CLAUDE.md").exists())
+
     def test_init_adds_missing_rule_section_without_rewriting_project_content(self) -> None:
         project = self.write(
             "agent-docs/project.md",
@@ -370,6 +501,45 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("USER PROJECT FACT", text)
         self.assertEqual(text.count("## 当前长期规则"), 1)
         self.assertEqual(text.count("## 项目结构与入口"), 1)
+
+    def test_project_sections_ignore_html_comments(self) -> None:
+        project = self.write(
+            "agent-docs/project.md",
+            (
+                "# Existing Project\n\n"
+                "<!--\n"
+                "## 当前长期规则\n"
+                "## 项目结构与入口\n"
+                "-->\n"
+            ),
+        )
+
+        initialize_project(self.root)
+        initialize_project(self.root)
+
+        text = project.read_text(encoding="utf-8")
+        self.assertEqual(text.count("## 当前长期规则"), 2)
+        self.assertEqual(text.count("## 项目结构与入口"), 2)
+        self.assertTrue(continuity_core._has_markdown_heading(text, "## 当前长期规则"))
+        self.assertTrue(continuity_core._has_markdown_heading(text, "## 项目结构与入口"))
+
+    def test_project_sections_accept_valid_atx_heading_variants(self) -> None:
+        project = self.write(
+            "agent-docs/project.md",
+            (
+                "# Existing Project\n\n"
+                "   ##\t当前长期规则 ##\n\nExisting rules.\n\n"
+                " ##  项目结构与入口 ###\n\nExisting structure.\n"
+            ),
+        )
+        original = project.read_bytes()
+
+        first = initialize_project(self.root)
+        second = initialize_project(self.root)
+
+        self.assertNotIn("agent-docs/project.md", first["updated"])
+        self.assertEqual(second["planned"], [])
+        self.assertEqual(project.read_bytes(), original)
 
     def test_init_rejects_corrupt_or_duplicate_managed_markers(self) -> None:
         cases = {
@@ -614,13 +784,17 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("`state.md` 不重复任务目标、进度、状态或任务级约束", agents)
         self.assertIn("checkpoint 可额外保存任务目标", agents)
         self.assertIn("`state.md` 可额外保存项目级阶段", agents)
+        self.assertIn("当前阶段完成条件、简洁当前证据", agents)
+        self.assertIn("不得包含任务目标、任务进度、任务状态或任务级约束", agents)
         self.assertIn("一个项目级操作性下一步", agents)
         self.assertIn("一个任务级操作性下一步", agents)
         self.assertIn("无冲突的 checkpoint 创建/暂停/恢复/完成", agents)
         self.assertIn("不保留旧值", rules)
         self.assertIn("| 目录或来源 | 权威范围 | 读取或复核条件 |", structure)
-        self.assertIn("只保存需要跨会话理解的项目阶段、焦点、阻塞和下一步", state)
+        self.assertIn("项目阶段、焦点、已核验阻塞、当前阶段完成条件、简洁当前证据", state)
         self.assertIn("当前焦点", state)
+        self.assertIn("## 当前证据", state)
+        self.assertNotIn("## 待清理", state)
         self.assertNotIn("当前任务：", state)
         self.assertNotIn("当前状态：", state)
         self.assertIn("Do not compress valid knowledge", skill)
@@ -637,7 +811,10 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("sole authority for that unfinished task contract", skill)
         self.assertIn("Routine checkpoint lifecycle changes", skill)
         self.assertIn("one project-level operational next action", skill)
+        self.assertIn("phase completion criteria, concise current evidence", skill)
+        self.assertIn("must not contain a task goal, task progress, task status", skill)
         self.assertIn("one task-level operational next action", skill)
+        self.assertIn("Remove the checkpoint recoverably", skill)
         self.assertIn("`agent-docs/state.md`", agents)
         self.assertIn("`agent-docs/checkpoint.md`", agents)
         self.assertIn("`agent-docs/state.md`", skill)
@@ -842,10 +1019,14 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("python -m venv", ci)
         self.assertIn('python-version: "3.13"', ci)
         self.assertIn('project-continuity" init "$target" --json', ci)
+        self.assertEqual(ci.count('project-continuity" init "$target" --json'), 2)
         self.assertIn('python scripts/verify_release_tag.py "${{ github.ref_name }}"', release)
         self.assertIn("python scripts/verify_wheel.py", release)
         self.assertIn("python -m venv", release)
         self.assertIn('project-continuity" init "$target" --json', release)
+        self.assertEqual(release.count('project-continuity" init "$target" --json'), 2)
+        self.assertIn("softprops/action-gh-release@v3", release)
+        self.assertNotIn("softprops/action-gh-release@v2", release)
         self.assertIn("project_continuity-* project-continuity.pyz", release)
         self.assertIn("dist/project_continuity-*", release)
         self.assertIn("dist/project-continuity.pyz", release)
