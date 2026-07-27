@@ -117,6 +117,26 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("USER RULE", agents_text)
         self.assertIn("USER PROJECT FACT", project.read_text(encoding="utf-8"))
 
+    def test_init_is_idempotent_with_crlf_source_templates(self) -> None:
+        real_read_text = continuity_core._read_text
+
+        def read_with_crlf_templates(path: Path) -> str:
+            text = real_read_text(path)
+            if path.parent == TEMPLATE_ROOT:
+                return text.replace("\r\n", "\n").replace("\n", "\r\n")
+            return text
+
+        with mock.patch.object(
+            continuity_core,
+            "_read_text",
+            side_effect=read_with_crlf_templates,
+        ):
+            initialize_project(self.root)
+            result = initialize_project(self.root)
+
+        self.assertEqual(result["planned"], [])
+        self.assertNotIn(b"\r\n", (self.root / "AGENTS.md").read_bytes())
+
     def test_init_retries_against_latest_content_after_a_concurrent_change(self) -> None:
         agents = self.write("AGENTS.md", "# Existing agents\n\nORIGINAL USER CONTENT\n")
         real_atomic_write = continuity_core._atomic_write_texts
@@ -698,6 +718,15 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertEqual(version.stdout.strip(), "project-continuity 0.10.0")
         self.assertEqual(removed.returncode, 2)
         self.assertIn("invalid choice", removed.stderr)
+
+    def test_windows_launcher_uses_the_active_path_python(self) -> None:
+        launcher = (REPOSITORY_ROOT / "bin" / "project-continuity.cmd").read_text(
+            encoding="utf-8"
+        )
+        script = "%~dp0..\\plugins\\project-continuity\\scripts\\project_continuity.py"
+
+        self.assertIn(f'python "{script}"', launcher)
+        self.assertNotIn("py -3", launcher)
 
     def test_cli_init_emits_json(self) -> None:
         completed = subprocess.run(

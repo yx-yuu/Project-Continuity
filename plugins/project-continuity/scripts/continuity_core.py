@@ -88,7 +88,8 @@ def _template(name: str, **values: str) -> str:
             text = resources.files("project_continuity.templates").joinpath(name).read_text(encoding="utf-8")
         except (ModuleNotFoundError, FileNotFoundError) as exc:
             raise FileNotFoundError(f"缺少模板: {name}") from exc
-    return Template(text).safe_substitute(values).rstrip() + "\n"
+    rendered = Template(text).safe_substitute(values)
+    return _with_newlines(rendered, "\n").rstrip() + "\n"
 
 
 def _marker(namespace: str, name: str, boundary: str) -> str:
