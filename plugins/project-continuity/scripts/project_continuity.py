@@ -54,10 +54,6 @@ def main(argv: list[str] | None = None) -> int:
             if not result["planned"]:
                 print("协议已是当前版本，未写入文件")
             print(f"项目协议 {result['mode']} 完成: {result['root']}")
-            if result["legacy_review_candidates"]:
-                print("发现旧版控制文件；请让 agent 提取仍有效信息后再决定是否清理：")
-                for item in result["legacy_review_candidates"]:
-                    print(f"- {item}")
             print('下一步：在项目中告诉 agent “使用 $project-continuity 接管当前项目”。')
         return 0
     except (OSError, ValueError, FileNotFoundError) as exc:

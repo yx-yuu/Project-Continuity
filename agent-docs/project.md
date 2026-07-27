@@ -3,7 +3,7 @@
 > 只保存当前仍然有效、跨任务稳定的项目定义；新定义生效时直接替换旧定义。
 
 - 项目名称：`project-continuity`
-- 更新时间：`2026-07-27T10:18:56Z`
+- 更新时间：`2026-07-27T11:01:45Z`
 - 当前远程仓库：`https://github.com/yx-yuu/Project-Continuity`
 
 ## 当前项目目标
@@ -54,8 +54,8 @@
 
 | 目录或来源 | 权威范围 | 读取或复核条件 |
 |---|---|---|
-| `plugins/project-continuity/` | Codex 插件、`project-continuity` skill、CLI 核心实现和项目模板的主要来源 | plugin/skill 校验、CLI 行为、模板迁移、cachebuster 和已有项目重新 `init` 的需要 |
-| `tests/` | CLI、模板、迁移与协议不变量的回归测试 | 版本一致性、幂等性、内容保留、marker 异常和打包行为 |
+| `plugins/project-continuity/` | Codex 插件、`project-continuity` skill、CLI 核心实现和项目模板的主要来源 | plugin/skill 校验、CLI 行为、模板更新、cachebuster 和已有项目重新 `init` 的需要 |
+| `tests/` | CLI、模板与协议不变量的回归测试 | 版本一致性、幂等性、内容保留、marker 异常和打包行为 |
 | `scripts/` | standalone zipapp 等开发和发布辅助脚本 | 打包内容、入口点和目标平台执行权限 |
 | `bin/` | 从源码运行 CLI 的跨平台启动器 | WSL/Linux 与 Windows 调用路径和退出码 |
 | `.agents/plugins/` | 本地 Codex marketplace 定义 | 插件源路径、marketplace 名称和安装策略 |

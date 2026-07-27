@@ -12,7 +12,6 @@ from string import Template
 
 PROTOCOL_VERSION = "0.10.0"
 CURRENT_MARKER_NAMESPACE = "project-continuity"
-LEGACY_MARKER_NAMESPACES = ("research-harness",)
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_ROOT = PLUGIN_ROOT / "assets" / "project-template"
 MAX_CONCURRENT_RETRIES = 3
@@ -196,14 +195,7 @@ def _namespace_span(text: str, namespace: str, name: str) -> tuple[int, int] | N
 
 
 def _managed_section_span(text: str, name: str) -> tuple[int, int] | None:
-    spans = [
-        span
-        for namespace in (CURRENT_MARKER_NAMESPACE, *LEGACY_MARKER_NAMESPACES)
-        if (span := _namespace_span(text, namespace, name)) is not None
-    ]
-    if len(spans) > 1:
-        raise ValueError(f"{name} 同时存在新旧受管理区块，请先人工检查")
-    return spans[0] if spans else None
+    return _namespace_span(text, CURRENT_MARKER_NAMESPACE, name)
 
 
 def _validate_managed_file(path: Path, name: str) -> None:
@@ -450,18 +442,6 @@ def _atomic_write_texts(
     return tuple(committed)
 
 
-def _legacy_review_candidates(root: Path) -> list[str]:
-    candidates = (
-        ".research-harness.json",
-        ".research-harness",
-        "agent-docs/index.md",
-        "agent-docs/bootstrap.md",
-        "agent-docs/claims.md",
-        "agent-docs/tasks",
-    )
-    return [relative for relative in candidates if (root / relative).exists()]
-
-
 def _validate_control_paths(root: Path) -> Path:
     docs = root / "agent-docs"
     if docs.is_symlink():
@@ -514,7 +494,6 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
     committed_actions: dict[Path, str] = {}
     initial_mode: str | None = None
     initial_agent_docs: list[str] | None = None
-    initial_legacy_candidates: list[str] | None = None
 
     for attempt in range(MAX_CONCURRENT_RETRIES):
         docs = _validate_control_paths(root)
@@ -525,7 +504,6 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
         if initial_mode is None:
             initial_mode = mode
             initial_agent_docs = existing_agent_docs
-            initial_legacy_candidates = _legacy_review_candidates(root)
 
         agents_path = root / "AGENTS.md"
         claude_path = root / "CLAUDE.md"
@@ -578,7 +556,6 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
             "unchanged": planned_unchanged,
             "preserves": preserves,
             "existing_agent_docs": initial_agent_docs,
-            "legacy_review_candidates": initial_legacy_candidates,
         }
         if dry_run:
             return result

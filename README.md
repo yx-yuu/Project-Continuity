@@ -129,7 +129,7 @@ Project Continuity 采用“始终感知、按事件更新、复杂场景才使�
 | 简单的项目级添加、替换或删除 | 直接按 `AGENTS.md` 协议处理 |
 | 普通编码、分析、测试和文件检查 | 正常工作，不调用 Skill |
 | 无冲突的 checkpoint 创建、暂停、恢复或完成 | 直接按 `AGENTS.md` 协议处理，不调用 Skill |
-| 接管或升级、复杂权威冲突、跨来源清理、旧版迁移，或 checkpoint 与真实 worktree 状态不一致 | 显式使用 `$project-continuity` |
+| 接管或升级、复杂权威冲突、跨来源清理，或 checkpoint 与真实 worktree 状态不一致 | 显式使用 `$project-continuity` |
 
 Codex Skill 默认关闭隐式调用。项目即使没有加载 Skill，仍可通过 `AGENTS.md`、`agent-docs/project.md` 和 `agent-docs/state.md` 正常工作。
 
@@ -191,7 +191,7 @@ Codex Skill 默认关闭隐式调用。项目即使没有加载 Skill，仍可�
 完成前必须验证：
 - `project-continuity --version` 可以执行。
 - `codex plugin list` 中 `project-continuity@personal` 是 installed、enabled。
-- 所有安装来源都指向 `yx-yuu/Project-Continuity`，不是旧的 `research-harness` 仓库。
+- 所有安装来源都指向 `yx-yuu/Project-Continuity`。
 
 最后只向我汇报安装位置、版本、验证结果，以及是否需要新建 Codex 任务来加载插件。遇到权限、网络或认证问题时，先自行诊断安全的替代方案；确实需要我操作时，再给出一条明确命令和原因。
 ```
@@ -237,10 +237,9 @@ project-continuity --version
 - 刷新 `AGENTS.md` 和 `CLAUDE.md` 的 managed block；
 - 保留 managed block 外的用户内容；
 - 在缺失时创建 `project.md` 和 `state.md`；
-- 为旧 `project.md` 补齐缺失的当前规则或权威入口章节；
+- 为已有 `project.md` 补齐缺失的当前规则或权威入口章节；
 - 在 dry-run 和 JSON 中按实际差异报告 `created`、`updated`、`unchanged` 与 `planned`，幂等执行不写文件；
 - 写入前核对刚读取的控制文档，检测到并发变化时基于最新版重新生成并有限重试；
-- 报告旧版控制文件候选，但不自动删除；
 - 保留完整项目知识、代码、数据、结果和 Git 状态。
 
 marker 缺失、重复或顺序损坏时，`init` 会停止并要求人工检查，不会静默生成第二套协议。

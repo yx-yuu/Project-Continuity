@@ -82,8 +82,6 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertFalse((self.root / "agent-docs" / "index.md").exists())
         self.assertFalse((self.root / "agent-docs" / "decisions.md").exists())
         self.assertFalse((self.root / "agent-docs" / "checkpoint.md").exists())
-        self.assertFalse((self.root / ".research-harness.json").exists())
-        self.assertFalse((self.root / ".research-harness").exists())
         self.assertFalse((self.root / ".gitignore").exists())
 
         project = (self.root / "agent-docs" / "project.md").read_text(encoding="utf-8")
@@ -239,49 +237,6 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("project-continuity:claude-adapter:start", claude)
         self.assertIn("auto memory", claude)
 
-    def test_init_migrates_claude_import_out_of_legacy_managed_block(self) -> None:
-        self.write(
-            "CLAUDE.md",
-            (
-                "# Existing instructions\n\n"
-                "<!-- research-harness:claude-adapter:start -->\n"
-                "@AGENTS.md\n\n## Claude Code 适配\n\nOLD ADAPTER\n"
-                "<!-- research-harness:claude-adapter:end -->\n"
-            ),
-        )
-
-        initialize_project(self.root)
-        initialize_project(self.root)
-
-        claude = (self.root / "CLAUDE.md").read_text(encoding="utf-8")
-        self.assertEqual(claude.count("@AGENTS.md"), 1)
-        self.assertNotIn("OLD ADAPTER", claude)
-        self.assertNotIn("research-harness:claude-adapter", claude)
-        self.assertIn("project-continuity:claude-adapter:start", claude)
-        self.assertIn("auto memory", claude)
-
-    def test_init_migrates_legacy_protocol_markers_in_place(self) -> None:
-        agents = self.write(
-            "AGENTS.md",
-            (
-                "# Existing instructions\n\nUSER PREFIX\n\n"
-                "<!-- research-harness:protocol:start -->\nOLD PROTOCOL\n"
-                "<!-- research-harness:protocol:end -->\n\nUSER SUFFIX\n"
-            ),
-        )
-
-        result = initialize_project(self.root)
-        initialize_project(self.root)
-
-        text = agents.read_text(encoding="utf-8")
-        self.assertEqual(result["mode"], "refresh")
-        self.assertEqual(text.count("project-continuity:protocol:start"), 1)
-        self.assertEqual(text.count("project-continuity:protocol:end"), 1)
-        self.assertNotIn("research-harness:protocol", text)
-        self.assertNotIn("OLD PROTOCOL", text)
-        self.assertIn("USER PREFIX", text)
-        self.assertIn("USER SUFFIX", text)
-
     def test_init_ignores_marker_examples_in_markdown_code(self) -> None:
         agents = self.write(
             "AGENTS.md",
@@ -292,9 +247,9 @@ class ProjectContinuityTests(unittest.TestCase):
                 "FENCED EXAMPLE\n"
                 "<!-- project-continuity:protocol:end -->\n"
                 "```\n\n"
-                "    <!-- research-harness:protocol:start -->\n"
+                "    <!-- project-continuity:protocol:start -->\n"
                 "    INDENTED EXAMPLE\n"
-                "    <!-- research-harness:protocol:end -->\n"
+                "    <!-- project-continuity:protocol:end -->\n"
             ),
         )
 
@@ -405,11 +360,9 @@ class ProjectContinuityTests(unittest.TestCase):
                 "<!-- project-continuity:protocol:start -->\nOTHER RULE\n"
                 "<!-- project-continuity:protocol:end -->\n"
             ),
-            "mixed-generations": (
-                "<!-- research-harness:protocol:start -->\nOLD RULE\n"
-                "<!-- research-harness:protocol:end -->\n"
-                "<!-- project-continuity:protocol:start -->\nOTHER RULE\n"
-                "<!-- project-continuity:protocol:end -->\n"
+            "end-before-start": (
+                "<!-- project-continuity:protocol:end -->\nOLD RULE\n"
+                "<!-- project-continuity:protocol:start -->\n"
             ),
         }
         for name, content in cases.items():
@@ -674,7 +627,7 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("删除时同步删除该路由", agents)
         self.assertIn("创建 `agent-docs/decisions.md`", structure)
         self.assertIn("registers it as a current authority", skill)
-        self.assertIn("without a project route as a legacy candidate", skill)
+        self.assertIn("exists without a project route", skill)
         self.assertIn("remove the file and its project route together", skill)
 
     def test_skill_is_explicit_and_excludes_ordinary_project_work(self) -> None:
@@ -696,6 +649,16 @@ class ProjectContinuityTests(unittest.TestCase):
         )
         self.assertFalse((skill_root / "references").exists())
 
+    def test_readme_has_a_copyable_codex_install_prompt(self) -> None:
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("### 最简单：把下面整段发给 Codex", readme)
+        self.assertIn("uv tool install --force git+https://github.com/yx-yuu/Project-Continuity.git", readme)
+        self.assertIn("codex plugin marketplace add yx-yuu/Project-Continuity --ref main", readme)
+        self.assertIn("codex plugin add project-continuity@personal", readme)
+        self.assertIn("不要初始化或修改当前项目", readme)
+        self.assertIn("project-continuity@personal` 是 installed、enabled", readme)
+
     def test_existing_complete_knowledge_is_not_rewritten_or_truncated(self) -> None:
         knowledge = "\n".join(f"CURRENT KNOWLEDGE {index}" for index in range(500))
         project = self.write(
@@ -715,18 +678,6 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("CURRENT KNOWLEDGE 0", text)
         self.assertIn("CURRENT KNOWLEDGE 499", text)
         self.assertEqual(text.count("CURRENT KNOWLEDGE"), 500)
-
-    def test_init_reports_legacy_state_without_deleting_it(self) -> None:
-        self.write(".research-harness.json", "{}\n")
-        self.write(".research-harness/snapshot.json", "{}\n")
-        self.write("agent-docs/index.md", "# Old index\n")
-
-        result = initialize_project(self.root, dry_run=True)
-
-        self.assertIn(".research-harness.json", result["legacy_review_candidates"])
-        self.assertIn(".research-harness", result["legacy_review_candidates"])
-        self.assertIn("agent-docs/index.md", result["legacy_review_candidates"])
-        self.assertTrue((self.root / ".research-harness" / "snapshot.json").is_file())
 
     def test_cli_only_exposes_init(self) -> None:
         version = subprocess.run(
@@ -812,9 +763,7 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn('name = "project-continuity"', pyproject)
         self.assertIn('version = "0.10.0"', pyproject)
         self.assertIn("https://github.com/yx-yuu/Project-Continuity", pyproject)
-        self.assertNotIn("github.com/yx-yuu/research-harness", pyproject)
         self.assertIn("github.com/yx-yuu/Project-Continuity.git", readme)
-        self.assertNotIn("github.com/yx-yuu/research-harness", readme)
         self.assertIn(
             'project-continuity = "project_continuity.project_continuity:main"',
             pyproject,
@@ -840,7 +789,6 @@ class ProjectContinuityTests(unittest.TestCase):
         )
         self.assertIn("name: project-continuity", skill)
         self.assertIn("$project-continuity", openai)
-        self.assertNotIn("$research-harness", openai)
 
     def test_workflows_use_current_commands_and_artifact_names(self) -> None:
         ci = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(
@@ -856,8 +804,6 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("python -m venv", ci)
         self.assertIn('python-version: "3.13"', ci)
         self.assertIn('project-continuity" init "$target" --json', ci)
-        self.assertNotIn("run: research-harness", ci)
-        self.assertNotIn("dist/research-harness.pyz", ci)
         self.assertIn('python scripts/verify_release_tag.py "${{ github.ref_name }}"', release)
         self.assertIn("python scripts/verify_wheel.py", release)
         self.assertIn("python -m venv", release)
@@ -865,8 +811,6 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("project_continuity-* project-continuity.pyz", release)
         self.assertIn("dist/project_continuity-*", release)
         self.assertIn("dist/project-continuity.pyz", release)
-        self.assertNotIn("dist/research_harness-*", release)
-        self.assertNotIn("dist/research-harness.pyz", release)
 
     @unittest.skipIf(sys.version_info < (3, 11), "verify_release_tag uses stdlib tomllib")
     def test_release_tag_verifier_matches_project_version(self) -> None:
@@ -951,7 +895,7 @@ class ProjectContinuityTests(unittest.TestCase):
         fixtures = {
             "valid": self.root / "valid.whl",
             "missing": self.root / "missing.whl",
-            "legacy": self.root / "legacy.whl",
+            "unexpected-top-level": self.root / "unexpected-top-level.whl",
             "corrupt": self.root / "corrupt.whl",
             "wrong-version-dist-info": self.root / "wrong-version-dist-info.whl",
             "wrong-project-dist-info": self.root / "wrong-project-dist-info.whl",
@@ -968,7 +912,10 @@ class ProjectContinuityTests(unittest.TestCase):
             fixtures["missing"],
             package_files - {"project_continuity/templates/state.md"},
         )
-        build_fixture(fixtures["legacy"], package_files | {"research_harness/legacy.py"})
+        build_fixture(
+            fixtures["unexpected-top-level"],
+            package_files | {"other_package/extra.py"},
+        )
         build_fixture(
             fixtures["corrupt"],
             overrides={"project_continuity/continuity_core.py": b"BROKEN CONTENT\n"},
@@ -1006,7 +953,7 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertEqual(valid.returncode, 0, valid.stderr)
         expected_errors = {
             "missing": "缺失",
-            "legacy": "旧包",
+            "unexpected-top-level": "非预期顶层内容",
             "corrupt": "文件内容与源码不一致",
             "wrong-version-dist-info": "dist-info 版本不匹配",
             "wrong-project-dist-info": "dist-info 版本不匹配",
@@ -1049,7 +996,6 @@ class ProjectContinuityTests(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertEqual(payload["protocol_version"], "0.10.0")
         self.assertTrue((target / "agent-docs" / "project.md").is_file())
-        self.assertFalse((target / ".research-harness.json").exists())
 
 
 if __name__ == "__main__":

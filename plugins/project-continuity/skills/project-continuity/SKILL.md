@@ -1,6 +1,6 @@
 ---
 name: project-continuity
-description: Maintain or repair a project's lightweight Markdown continuity controls. Use only when adopting or upgrading Project Continuity, resolving ambiguous scope or conflicting authorities, reconciling a broad replacement across control surfaces, migrating legacy continuity context, or repairing a checkpoint whose contract conflicts with current worktree state. Do not invoke for ordinary coding, research, analysis, testing, file inspection, simple project-scoped mutations, or routine checkpoint creation, pause, resume, and completion already covered by the project's AGENTS.md protocol.
+description: Maintain or repair a project's lightweight Markdown continuity controls. Use only when adopting or upgrading Project Continuity, resolving ambiguous scope or conflicting authorities, reconciling a broad replacement across control surfaces, or repairing a checkpoint whose contract conflicts with current worktree state. Do not invoke for ordinary coding, research, analysis, testing, file inspection, simple project-scoped mutations, or routine checkpoint creation, pause, resume, and completion already covered by the project's AGENTS.md protocol.
 ---
 
 # Project Continuity
@@ -13,7 +13,6 @@ Maintain current user intent, project knowledge, authority routes, and unfinishe
 2. Read existing instructions, current-status material, project documentation, top-level responsibilities, and code or configuration entrypoints needed to identify current authorities. Inspect real sources with the tools appropriate to the project; do not build a parallel inventory.
 3. Preserve complete valid knowledge. Put current project definitions, constraints, user rules, and authority routes in `agent-docs/project.md`; put only the project-level phase, focus, blockers, and next step in `agent-docs/state.md`. Create `agent-docs/checkpoint.md` only when an unfinished task must survive the current session.
 4. Treat model inference and unverified output as candidates. Ask only when an unresolved authority or scope decision would materially affect future work.
-5. Review legacy candidates reported by `init`, reconcile still-current information, and remove obsolete control files only with a recoverable mechanism.
 
 ## Restore Context
 
@@ -63,7 +62,7 @@ Do not create a checkpoint for small work that can finish in the current context
 
 ## Repair The Control Plane
 
-Inspect actual project state rather than relying on continuity summaries. Reconcile only confirmed current definitions, knowledge, constraints, routes, and task state. Treat an existing `agent-docs/decisions.md` without a project route as a legacy candidate: validate its current decisions, then register the current authority or remove the obsolete file recoverably. Create `agent-docs/decisions.md` only when an effective decision, its minimum reason, and its invalidation condition must survive to prevent repeated error; register its authority and scope in `agent-docs/project.md` at the same time. When no current decision requires it, remove the file and its project route together.
+Inspect actual project state rather than relying on continuity summaries. Reconcile only confirmed current definitions, knowledge, constraints, routes, and task state. If `agent-docs/decisions.md` exists without a project route, validate its current decisions, then register the current authority or remove the obsolete file recoverably. Create `agent-docs/decisions.md` only when an effective decision, its minimum reason, and its invalidation condition must survive to prevent repeated error; register its authority and scope in `agent-docs/project.md` at the same time. When no current decision requires it, remove the file and its project route together.
 
 ## Preserve The Boundary
 

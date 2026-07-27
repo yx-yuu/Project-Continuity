@@ -81,10 +81,6 @@ def verify_wheel(path: Path) -> None:
             if actual != expected:
                 raise ValueError(f"wheel 文件内容与源码不一致: {name}")
 
-        legacy = sorted(name for name in names if name.startswith("research_harness/"))
-        if legacy:
-            raise ValueError(f"wheel 仍包含旧包: {legacy}")
-
         dist_info_directories = {
             name.split("/", 1)[0]
             for name in names
@@ -95,6 +91,15 @@ def verify_wheel(path: Path) -> None:
         dist_info = next(iter(dist_info_directories))
         if dist_info != EXPECTED_DIST_INFO:
             raise ValueError(f"wheel dist-info 版本不匹配；预期={EXPECTED_DIST_INFO}；实际={dist_info}")
+        unexpected_top_level = sorted(
+            name
+            for name in names
+            if not name.endswith("/")
+            and not name.startswith("project_continuity/")
+            and not name.startswith(f"{dist_info}/")
+        )
+        if unexpected_top_level:
+            raise ValueError(f"wheel 包含非预期顶层内容: {unexpected_top_level}")
         metadata_path = f"{dist_info}/METADATA"
         if metadata_path not in names:
             raise ValueError(f"wheel 缺少 METADATA: {metadata_path}")
