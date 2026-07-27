@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 try:
-    from .harness_core import PROTOCOL_VERSION, initialize_project
+    from .continuity_core import PROTOCOL_VERSION, initialize_project
 except ImportError:
-    from harness_core import PROTOCOL_VERSION, initialize_project
+    from continuity_core import PROTOCOL_VERSION, initialize_project
 
 
 def _print_json(value: object) -> None:
@@ -17,8 +17,8 @@ def _print_json(value: object) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="research-harness",
-        description="Install a lightweight, agent-maintained research project protocol.",
+        prog="project-continuity",
+        description="Install a lightweight, agent-maintained project continuity protocol.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {PROTOCOL_VERSION}")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("发现旧版控制文件；请让 agent 提取仍有效信息后再决定是否清理：")
                 for item in result["legacy_review_candidates"]:
                     print(f"- {item}")
-            print('下一步：在项目中告诉 agent “使用 research-harness 接管当前项目”。')
+            print('下一步：在项目中告诉 agent “使用 $project-continuity 接管当前项目”。')
         return 0
     except (OSError, ValueError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)

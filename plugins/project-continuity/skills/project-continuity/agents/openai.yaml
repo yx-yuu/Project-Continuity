@@ -1,0 +1,6 @@
+interface:
+  display_name: "Project Continuity"
+  short_description: "Maintain project context and unfinished task continuity"
+  default_prompt: "Use $project-continuity to adopt or repair this project's continuity context and unfinished task state."
+policy:
+  allow_implicit_invocation: false

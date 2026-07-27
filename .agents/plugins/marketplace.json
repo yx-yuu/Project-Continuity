@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "codex-research-harness",
+      "name": "project-continuity",
       "source": {
         "source": "local",
-        "path": "./plugins/codex-research-harness"
+        "path": "./plugins/project-continuity"
       },
       "policy": {
         "installation": "AVAILABLE",

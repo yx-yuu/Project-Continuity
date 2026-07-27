@@ -3,15 +3,15 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "research-harness"
-version = "0.6.0"
-description = "A lightweight, agent-maintained protocol for research projects."
+name = "project-continuity"
+version = "0.9.0"
+description = "A lightweight, agent-maintained protocol for project continuity."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "YYX"}]
-keywords = ["research", "coding-agent", "project-management", "reproducibility"]
+keywords = ["coding-agent", "context", "project-management", "continuity"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -20,7 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
-  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development",
 ]
 
 [project.urls]
@@ -28,14 +28,14 @@ Homepage = "https://github.com/yx-yuu/research-harness"
 Repository = "https://github.com/yx-yuu/research-harness"
 
 [project.scripts]
-research-harness = "research_harness.research_harness:main"
+project-continuity = "project_continuity.project_continuity:main"
 
 [tool.setuptools]
-packages = ["research_harness", "research_harness.templates"]
+packages = ["project_continuity", "project_continuity.templates"]
 
 [tool.setuptools.package-dir]
-research_harness = "plugins/codex-research-harness/scripts"
-"research_harness.templates" = "plugins/codex-research-harness/assets/project-template"
+project_continuity = "plugins/project-continuity/scripts"
+"project_continuity.templates" = "plugins/project-continuity/assets/project-template"
 
 [tool.setuptools.package-data]
-"research_harness.templates" = ["*.md"]
+"project_continuity.templates" = ["*.md"]

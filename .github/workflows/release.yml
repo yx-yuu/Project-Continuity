@@ -12,20 +12,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - uses: astral-sh/setup-uv@v6
+      - name: Validate release tag
+        run: python scripts/verify_release_tag.py "${{ github.ref_name }}"
       - name: Run tests
         run: python -m unittest discover -s tests -v
       - name: Build Python distributions
         run: uv build
       - name: Build standalone zipapp
         run: python scripts/build_zipapp.py
+      - name: Check wheel contents
+        run: python scripts/verify_wheel.py
+      - name: Install and smoke-test wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/project-continuity-wheel"
+          "$RUNNER_TEMP/project-continuity-wheel/bin/python" -m pip install --no-deps dist/project_continuity-*.whl
+          target="$(mktemp -d)"
+          "$RUNNER_TEMP/project-continuity-wheel/bin/project-continuity" init "$target" --json
+          test -f "$target/agent-docs/project.md"
+          test -f "$target/agent-docs/state.md"
       - name: Generate checksums
-        run: cd dist && sha256sum research_harness-* research-harness.pyz > SHA256SUMS
+        run: cd dist && sha256sum project_continuity-* project-continuity.pyz > SHA256SUMS
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            dist/research_harness-*
-            dist/research-harness.pyz
+            dist/project_continuity-*
+            dist/project-continuity.pyz
             dist/SHA256SUMS

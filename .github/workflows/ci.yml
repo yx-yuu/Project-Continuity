@@ -23,16 +23,29 @@ jobs:
       - name: Install source package
         run: python -m pip install .
       - name: Check installed command
-        run: research-harness --version
+        run: project-continuity --version
       - name: Build and check zipapp
         run: |
           python scripts/build_zipapp.py
-          python dist/research-harness.pyz --version
+          python dist/project-continuity.pyz --version
 
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - uses: astral-sh/setup-uv@v6
       - name: Build distributions
         run: uv build
+      - name: Check wheel contents
+        run: python scripts/verify_wheel.py
+      - name: Install and smoke-test wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/project-continuity-wheel"
+          "$RUNNER_TEMP/project-continuity-wheel/bin/python" -m pip install --no-deps dist/project_continuity-*.whl
+          target="$(mktemp -d)"
+          "$RUNNER_TEMP/project-continuity-wheel/bin/project-continuity" init "$target" --json
+          test -f "$target/agent-docs/project.md"
+          test -f "$target/agent-docs/state.md"

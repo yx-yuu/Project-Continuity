@@ -1,0 +1,33 @@
+{
+  "name": "project-continuity",
+  "version": "0.9.0+codex.20260726215847",
+  "description": "Maintain a lightweight, agent-driven project continuity protocol.",
+  "author": {
+    "name": "YYX"
+  },
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "rules",
+    "lifecycle",
+    "recovery",
+    "continuity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project Continuity",
+    "shortDescription": "Lightweight continuity controls for agent projects.",
+    "longDescription": "Keeps current user intent, complete valid project knowledge, scoped rules, authority routes, current state, and one optional unfinished task contract recoverable while leaving project reasoning and execution to the agent.",
+    "developerName": "YYX",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Adopt this project and establish its current knowledge, constraints, and authority routes.",
+      "Resolve ambiguous scope or conflicting project authorities without retaining stale versions.",
+      "Pause or restore a checkpointed task without mixing worktree state."
+    ]
+  }
+}

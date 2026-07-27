@@ -1,4 +1,0 @@
-interface:
-  display_name: "Research Harness"
-  short_description: "Maintain lightweight research project context"
-  default_prompt: "Use $research-harness to adopt this project and maintain its current constraints, directory responsibilities, and task state."
