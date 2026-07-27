@@ -832,6 +832,10 @@ class ProjectContinuityTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        for workflow in (ci, release):
+            self.assertIn("actions/checkout@v7", workflow)
+            self.assertIn("actions/setup-python@v7", workflow)
+            self.assertIn("astral-sh/setup-uv@v9.0.0", workflow)
         self.assertIn("project-continuity --version", ci)
         self.assertIn("dist/project-continuity.pyz --version", ci)
         self.assertIn("python scripts/verify_wheel.py", ci)
