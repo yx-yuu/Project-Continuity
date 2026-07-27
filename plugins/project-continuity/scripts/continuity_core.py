@@ -10,11 +10,12 @@ from pathlib import Path
 from string import Template
 
 
-PROTOCOL_VERSION = "0.9.0"
+PROTOCOL_VERSION = "0.10.0"
 CURRENT_MARKER_NAMESPACE = "project-continuity"
 LEGACY_MARKER_NAMESPACES = ("research-harness",)
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_ROOT = PLUGIN_ROOT / "assets" / "project-template"
+MAX_CONCURRENT_RETRIES = 3
 
 
 def utc_now() -> str:
@@ -24,6 +25,33 @@ def utc_now() -> str:
 def _read_text(path: Path) -> str:
     with path.open("r", encoding="utf-8", newline="") as stream:
         return stream.read()
+
+
+class ConcurrentModificationError(OSError):
+    """Raised when a control file changes while an initialization plan is being committed."""
+
+    def __init__(self, message: str, committed: tuple[Path, ...] = ()) -> None:
+        super().__init__(message)
+        self.committed = committed
+
+
+def _current_control_text(path: Path) -> str | None:
+    if path.parent.is_symlink():
+        raise ConcurrentModificationError(f"控制文档目录在写入期间变成符号链接: {path.parent}")
+    if path.is_symlink():
+        raise ConcurrentModificationError(f"控制文档在写入期间变成符号链接: {path}")
+    if not path.exists():
+        return None
+    if not path.is_file():
+        raise ConcurrentModificationError(f"控制文档在写入期间不再是文件: {path}")
+    return _read_text(path)
+
+
+def _verify_expected_contents(expected: dict[Path, str | None]) -> None:
+    changed = [path for path, original in expected.items() if _current_control_text(path) != original]
+    if changed:
+        paths = ", ".join(str(path) for path in changed)
+        raise ConcurrentModificationError(f"控制文档在写入期间发生变化，请重新读取后重试: {paths}")
 
 
 def _preferred_newline(text: str) -> str:
@@ -279,9 +307,11 @@ def _require_writable_directory(path: Path) -> None:
 
 def _nearest_existing_directory(path: Path) -> Path:
     candidate = path
-    while not candidate.exists():
+    while True:
         if candidate.is_symlink():
             raise ValueError(f"控制文档目录不能是符号链接: {candidate}")
+        if candidate.exists():
+            break
         parent = candidate.parent
         if parent == candidate:
             break
@@ -299,6 +329,8 @@ def _preflight_writes(paths: list[Path]) -> None:
 
 
 def _stage_text(path: Path, text: str, mode: int | None) -> Path:
+    if path.parent.is_symlink():
+        raise ConcurrentModificationError(f"控制文档目录在写入期间变成符号链接: {path.parent}")
     for _ in range(100):
         temporary = path.parent / f".{path.name}.{secrets.token_hex(8)}.tmp"
         try:
@@ -333,18 +365,25 @@ def _remove_empty_directories(paths: list[Path]) -> None:
             pass
 
 
-def _atomic_write_texts(writes: dict[Path, str]) -> None:
+def _atomic_write_texts(
+    writes: dict[Path, str],
+    expected: dict[Path, str | None],
+) -> tuple[Path, ...]:
     if not writes:
-        return
+        return ()
+    if set(writes) != set(expected):
+        raise ValueError("原子写入的预期内容与写入目标不一致")
 
     paths = list(writes)
+    _verify_expected_contents(expected)
     _preflight_writes(paths)
     originals: dict[Path, tuple[str | None, int | None]] = {}
     for path in paths:
         originals[path] = (
-            _read_text(path) if path.is_file() else None,
+            _current_control_text(path),
             stat.S_IMODE(path.stat().st_mode) if path.is_file() else None,
         )
+    _verify_expected_contents(expected)
 
     created_directories: list[Path] = []
     staged: dict[Path, Path] = {}
@@ -369,14 +408,25 @@ def _atomic_write_texts(writes: dict[Path, str]) -> None:
 
     committed: list[Path] = []
     try:
+        current_expected = expected.copy()
         for path, temporary in staged.items():
+            _verify_expected_contents(current_expected)
             os.replace(temporary, path)
             committed.append(path)
+            current_expected[path] = writes[path]
+        _verify_expected_contents({path: writes[path] for path in committed})
+    except ConcurrentModificationError as exc:
+        # A retry will merge against the latest files. Rolling back here could overwrite
+        # the concurrent change that this guard is specifically intended to preserve.
+        raise ConcurrentModificationError(str(exc), tuple(committed)) from exc
     except BaseException as exc:
         rollback_errors = []
         for path in reversed(committed):
             original, mode = originals[path]
             try:
+                if _current_control_text(path) != writes[path]:
+                    rollback_errors.append(f"{path}: 内容在回滚前发生变化，已保留最新内容")
+                    continue
                 if original is None:
                     path.unlink(missing_ok=True)
                 else:
@@ -397,6 +447,7 @@ def _atomic_write_texts(writes: dict[Path, str]) -> None:
         for temporary in staged.values():
             temporary.unlink(missing_ok=True)
         _remove_empty_directories(created_directories)
+    return tuple(committed)
 
 
 def _legacy_review_candidates(root: Path) -> list[str]:
@@ -437,25 +488,11 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
     if not root.is_dir():
         raise ValueError(f"项目目录不存在或不是目录: {root}")
 
-    docs = _validate_control_paths(root)
-    _validate_managed_file(root / "AGENTS.md", "protocol")
-    _validate_managed_file(root / "CLAUDE.md", "claude-adapter")
-
-    existing_agent_docs = sorted(path.name for path in docs.glob("*.md")) if docs.is_dir() else []
-    mode = "refresh" if _has_managed_section(root / "AGENTS.md", "protocol") else "initialize"
-    planned = [
-        "AGENTS.md managed continuity protocol",
-        "CLAUDE.md AGENTS import adapter",
-        "agent-docs/project.md and missing current-rule/authority sections",
-        "agent-docs/state.md",
-    ]
     preserves = [
         "existing user content outside managed blocks in AGENTS.md and CLAUDE.md",
         "complete existing project.md and state.md knowledge",
         "all project files, datasets, results, and Git state",
     ]
-    legacy = _legacy_review_candidates(root)
-
     rules = _template("project.rules.md")
     structure = _template("project.structure.md")
     agent_protocol = _template("AGENTS.block.md")
@@ -468,75 +505,128 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
         STRUCTURE_SECTION=structure.rstrip(),
     )
     state_template = _template("state.md", DATE=utc_now())
+    relative_paths = (
+        ("AGENTS.md", root / "AGENTS.md"),
+        ("CLAUDE.md", root / "CLAUDE.md"),
+        ("agent-docs/project.md", root / "agent-docs" / "project.md"),
+        ("agent-docs/state.md", root / "agent-docs" / "state.md"),
+    )
+    committed_actions: dict[Path, str] = {}
+    initial_mode: str | None = None
+    initial_agent_docs: list[str] | None = None
+    initial_legacy_candidates: list[str] | None = None
 
-    if dry_run:
-        return {
+    for attempt in range(MAX_CONCURRENT_RETRIES):
+        docs = _validate_control_paths(root)
+        _validate_managed_file(root / "AGENTS.md", "protocol")
+        _validate_managed_file(root / "CLAUDE.md", "claude-adapter")
+        existing_agent_docs = sorted(path.name for path in docs.glob("*.md")) if docs.is_dir() else []
+        mode = "refresh" if _has_managed_section(root / "AGENTS.md", "protocol") else "initialize"
+        if initial_mode is None:
+            initial_mode = mode
+            initial_agent_docs = existing_agent_docs
+            initial_legacy_candidates = _legacy_review_candidates(root)
+
+        agents_path = root / "AGENTS.md"
+        claude_path = root / "CLAUDE.md"
+        project_path = docs / "project.md"
+        state_path = docs / "state.md"
+        existing_contents = {
+            path: _current_control_text(path)
+            for _, path in relative_paths
+        }
+        final_contents = {
+            agents_path: _upsert_managed_section_text(
+                existing_contents[agents_path],
+                "protocol",
+                agent_protocol,
+                heading="Project Agent Instructions",
+            ),
+            claude_path: _claude_adapter_text(existing_contents[claude_path], claude_adapter),
+            project_path: (
+                project_template
+                if existing_contents[project_path] is None
+                else _project_with_missing_sections(existing_contents[project_path], rules, structure)
+            ),
+            state_path: state_template if existing_contents[state_path] is None else existing_contents[state_path],
+        }
+        writes = {
+            path: content
+            for path, content in final_contents.items()
+            if existing_contents[path] != content
+        }
+        planned_created = [
+            relative
+            for relative, path in relative_paths
+            if path in writes and existing_contents[path] is None
+        ]
+        planned_updated = [
+            relative
+            for relative, path in relative_paths
+            if path in writes and existing_contents[path] is not None
+        ]
+        planned_unchanged = [relative for relative, path in relative_paths if path not in writes]
+        result = {
             "ok": True,
-            "dry_run": True,
-            "mode": mode,
+            "dry_run": dry_run,
+            "mode": initial_mode,
             "root": str(root),
             "protocol_version": PROTOCOL_VERSION,
-            "planned": planned,
+            "planned": [*planned_created, *planned_updated],
+            "created": planned_created,
+            "updated": planned_updated,
+            "unchanged": planned_unchanged,
             "preserves": preserves,
-            "existing_agent_docs": existing_agent_docs,
-            "legacy_review_candidates": legacy,
+            "existing_agent_docs": initial_agent_docs,
+            "legacy_review_candidates": initial_legacy_candidates,
         }
+        if dry_run:
+            return result
 
-    agents_path = root / "AGENTS.md"
-    claude_path = root / "CLAUDE.md"
-    project_path = docs / "project.md"
-    state_path = docs / "state.md"
-    agents_existing = _read_text(agents_path) if agents_path.is_file() else None
-    claude_existing = _read_text(claude_path) if claude_path.is_file() else None
-    project_existing = _read_text(project_path) if project_path.is_file() else None
-    state_existing = _read_text(state_path) if state_path.is_file() else None
+        try:
+            committed = _atomic_write_texts(
+                writes,
+                {path: existing_contents[path] for path in writes},
+            )
+        except ConcurrentModificationError as exc:
+            for path in exc.committed:
+                committed_actions.setdefault(
+                    path,
+                    "created" if existing_contents[path] is None else "updated",
+                )
+            if attempt + 1 == MAX_CONCURRENT_RETRIES:
+                if committed_actions:
+                    partial = ", ".join(
+                        relative
+                        for relative, path in relative_paths
+                        if path in committed_actions
+                    )
+                    raise ConcurrentModificationError(
+                        f"{exc}；初始化已写入部分控制文档 ({partial})，"
+                        "请确认并发修改结束后重新运行 init",
+                        tuple(committed_actions),
+                    ) from exc
+                raise
+            continue
+        for path in committed:
+            committed_actions.setdefault(
+                path,
+                "created" if existing_contents[path] is None else "updated",
+            )
+        result["created"] = [
+            relative
+            for relative, path in relative_paths
+            if committed_actions.get(path) == "created"
+        ]
+        result["updated"] = [
+            relative
+            for relative, path in relative_paths
+            if committed_actions.get(path) == "updated"
+        ]
+        result["planned"] = [*result["created"], *result["updated"]]
+        result["unchanged"] = [
+            relative for relative, path in relative_paths if path not in committed_actions
+        ]
+        return result
 
-    final_contents = {
-        agents_path: _upsert_managed_section_text(
-            agents_existing,
-            "protocol",
-            agent_protocol,
-            heading="Project Agent Instructions",
-        ),
-        claude_path: _claude_adapter_text(claude_existing, claude_adapter),
-        project_path: (
-            project_template
-            if project_existing is None
-            else _project_with_missing_sections(project_existing, rules, structure)
-        ),
-        state_path: state_template if state_existing is None else state_existing,
-    }
-    existing_contents = {
-        agents_path: agents_existing,
-        claude_path: claude_existing,
-        project_path: project_existing,
-        state_path: state_existing,
-    }
-    writes = {
-        path: content
-        for path, content in final_contents.items()
-        if existing_contents[path] != content
-    }
-    _atomic_write_texts(writes)
-
-    created = [
-        relative
-        for path, relative in (
-            (project_path, "agent-docs/project.md"),
-            (state_path, "agent-docs/state.md"),
-        )
-        if existing_contents[path] is None
-    ]
-
-    return {
-        "ok": True,
-        "dry_run": False,
-        "mode": mode,
-        "root": str(root),
-        "protocol_version": PROTOCOL_VERSION,
-        "created": created,
-        "refreshed": ["AGENTS.md", "CLAUDE.md"],
-        "preserves": preserves,
-        "existing_agent_docs": existing_agent_docs,
-        "legacy_review_candidates": legacy,
-    }
+    raise ConcurrentModificationError("控制文档持续发生变化，无法安全完成初始化")

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-continuity"
-version = "0.9.0"
+version = "0.10.0"
 description = "A lightweight, agent-maintained protocol for project continuity."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,8 +24,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yx-yuu/research-harness"
-Repository = "https://github.com/yx-yuu/research-harness"
+Homepage = "https://github.com/yx-yuu/Project-Continuity"
+Repository = "https://github.com/yx-yuu/Project-Continuity"
 
 [project.scripts]
 project-continuity = "project_continuity.project_continuity:main"

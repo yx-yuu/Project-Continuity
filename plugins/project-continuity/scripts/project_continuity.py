@@ -40,10 +40,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.dry_run:
             print(f"模式: {result['mode']}；协议版本: {result['protocol_version']}")
             print(f"将处理: {result['root']}")
-            for item in result["planned"]:
-                print(f"- {item}")
+            if result["planned"]:
+                for item in result["planned"]:
+                    action = "创建" if item in result["created"] else "更新"
+                    print(f"- {action}: {item}")
+            else:
+                print("- 无文件变化")
         else:
-            print(f"已完成项目协议 {result['mode']}: {result['root']}")
+            if result["created"]:
+                print(f"已创建: {', '.join(result['created'])}")
+            if result["updated"]:
+                print(f"已更新: {', '.join(result['updated'])}")
+            if not result["planned"]:
+                print("协议已是当前版本，未写入文件")
+            print(f"项目协议 {result['mode']} 完成: {result['root']}")
             if result["legacy_review_candidates"]:
                 print("发现旧版控制文件；请让 agent 提取仍有效信息后再决定是否清理：")
                 for item in result["legacy_review_candidates"]:
