@@ -10,6 +10,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _configure_utf8_output() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="strict")
+
+
 def expected_tag(pyproject: Path = ROOT / "pyproject.toml") -> str:
     with pyproject.open("rb") as stream:
         metadata = tomllib.load(stream)
@@ -26,6 +33,7 @@ def verify_release_tag(tag: str, pyproject: Path = ROOT / "pyproject.toml") -> N
 
 
 def main() -> int:
+    _configure_utf8_output()
     parser = argparse.ArgumentParser(description="Verify a release tag against pyproject.toml.")
     parser.add_argument("tag")
     args = parser.parse_args()

@@ -159,7 +159,7 @@ class ProjectContinuityTests(unittest.TestCase):
         agents = self.write("AGENTS.md", "# Existing agents\n")
         error = continuity_core.ConcurrentModificationError(
             "simulated concurrent change",
-            (agents,),
+            (agents.resolve(),),
         )
 
         with mock.patch.object(continuity_core, "_atomic_write_texts", side_effect=error):
@@ -685,12 +685,14 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         removed = subprocess.run(
             cli_command("sync", str(self.root)),
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         self.assertEqual(version.stdout.strip(), "project-continuity 0.10.0")
@@ -703,6 +705,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         payload = json.loads(completed.stdout)
@@ -723,6 +726,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         self.assertIn("协议已是当前版本，未写入文件", completed.stdout)
@@ -734,6 +738,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         self.assertIn("使用 $project-continuity 接管当前项目", completed.stdout)
@@ -819,12 +824,14 @@ class ProjectContinuityTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         invalid = subprocess.run(
             [sys.executable, str(REPOSITORY_ROOT / "scripts" / "verify_release_tag.py"), "v0.10.1"],
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         self.assertEqual(valid.returncode, 0, valid.stderr)
@@ -949,6 +956,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         self.assertEqual(valid.returncode, 0, valid.stderr)
         expected_errors = {
@@ -971,6 +979,7 @@ class ProjectContinuityTests(unittest.TestCase):
                     check=False,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                 )
                 self.assertEqual(completed.returncode, 2, completed.stderr)
                 self.assertIn(message, completed.stderr)
@@ -982,6 +991,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         target = self.root / "portable-project"
         target.mkdir()
@@ -991,6 +1001,7 @@ class ProjectContinuityTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
         payload = json.loads(completed.stdout)

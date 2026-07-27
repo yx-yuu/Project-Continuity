@@ -34,6 +34,13 @@ EXPECTED_ENTRY_POINT = "project_continuity.project_continuity:main"
 EXPECTED_NAME = "project-continuity"
 
 
+def _configure_utf8_output() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="strict")
+
+
 def _project_version() -> str:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     project_section = re.search(r"(?ms)^\[project\]\s*(.*?)(?=^\[|\Z)", pyproject)
@@ -128,6 +135,7 @@ def verify_wheel(path: Path) -> None:
 
 
 def main() -> int:
+    _configure_utf8_output()
     parser = argparse.ArgumentParser(description="Verify the built Project Continuity wheel.")
     parser.add_argument("wheel", nargs="?", type=Path)
     args = parser.parse_args()
