@@ -163,6 +163,41 @@ Codex Skill 默认关闭隐式调用。项目即使没有加载 Skill，仍可�
 
 ## 快速开始
 
+### 最简单：把下面整段发给 Codex
+
+不需要先克隆仓库，也不需要自己判断安装命令。新建一个 Codex 任务，把下面整段原样发给它：
+
+```text
+请帮我安装或升级 Project Continuity。
+
+官方仓库：https://github.com/yx-yuu/Project-Continuity
+
+目标：
+1. 安装或升级 `project-continuity` CLI。
+2. 把官方仓库添加为 Codex plugin marketplace，并安装 `project-continuity` 插件。
+3. 验证 CLI 和插件都能正常使用。
+
+请直接检查当前操作系统、Shell、Python、Git、Codex CLI、uv 和 pipx 的实际状态，然后完成安装，不要只给我命令或教程。
+
+安装要求：
+- CLI 优先使用：`uv tool install --force git+https://github.com/yx-yuu/Project-Continuity.git`。
+- 没有 uv 时可以使用 pipx；如果两者都没有，选择不需要管理员权限的安全安装方式。不要使用 sudo，也不要修改系统 Python。
+- 添加 marketplace 时使用：`codex plugin marketplace add yx-yuu/Project-Continuity --ref main`。
+- 当前 marketplace 名称是 `personal`，安装插件时使用：`codex plugin add project-continuity@personal`。
+- 如果已经安装，执行升级或重装，不要创建重复配置。
+- 如果 `personal` 已被另一个 marketplace 占用，不要覆盖它；保留已有配置并告诉我准确的冲突和解决选项。
+- 不要初始化或修改当前项目，不要提交或推送任何仓库；这次只安装工具和插件。
+
+完成前必须验证：
+- `project-continuity --version` 可以执行。
+- `codex plugin list` 中 `project-continuity@personal` 是 installed、enabled。
+- 所有安装来源都指向 `yx-yuu/Project-Continuity`，不是旧的 `research-harness` 仓库。
+
+最后只向我汇报安装位置、版本、验证结果，以及是否需要新建 Codex 任务来加载插件。遇到权限、网络或认证问题时，先自行诊断安全的替代方案；确实需要我操作时，再给出一条明确命令和原因。
+```
+
+这段提示词只安装 CLI 和 Codex 插件，不会接管当前目录。安装成功后，在需要接管的项目中使用下一节的提示词。
+
 ### 交给 Agent 接管
 
 在目标项目根目录告诉 agent：
