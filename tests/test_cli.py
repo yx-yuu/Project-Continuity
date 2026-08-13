@@ -50,7 +50,7 @@ class ProjectContinuityTests(unittest.TestCase):
         result = initialize_project(self.root, dry_run=True)
 
         self.assertEqual(result["mode"], "initialize")
-        self.assertEqual(result["protocol_version"], "0.10.0")
+        self.assertEqual(result["protocol_version"], "0.11.0")
         self.assertEqual(
             result["created"],
             ["AGENTS.md", "CLAUDE.md", "agent-docs/project.md", "agent-docs/state.md"],
@@ -81,19 +81,29 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertTrue((self.root / "agent-docs" / "state.md").is_file())
         self.assertFalse((self.root / "agent-docs" / "index.md").exists())
         self.assertFalse((self.root / "agent-docs" / "decisions.md").exists())
+        self.assertFalse((self.root / "agent-docs" / "current-decisions.md").exists())
         self.assertFalse((self.root / "agent-docs" / "checkpoint.md").exists())
         self.assertFalse((self.root / ".gitignore").exists())
 
         project = (self.root / "agent-docs" / "project.md").read_text(encoding="utf-8")
         agents = (self.root / "AGENTS.md").read_text(encoding="utf-8")
+        agents_template = (TEMPLATE_ROOT / "AGENTS.block.md").read_text(encoding="utf-8")
+        managed_agents = agents.split(
+            "<!-- project-continuity:protocol:start -->\n", 1
+        )[1].split("<!-- project-continuity:protocol:end -->", 1)[0].lstrip("\n")
         self.assertIn("Example Project", project)
         self.assertIn("## 当前长期规则", project)
         self.assertIn("## 当前项目目标", project)
         self.assertIn("## 当前有效知识与约束", project)
         self.assertIn("| 目录或来源 | 权威范围 | 读取或复核条件 |", project)
-        self.assertIn("不维护文件清单", agents)
+        self.assertNotIn("不维护文件清单", agents)
         self.assertIn("一个未完成写任务", agents)
         self.assertNotIn("## 当前研究问题", project)
+        self.assertEqual(managed_agents, agents_template)
+        self.assertIn(
+            "<!-- project-continuity:protocol:start -->\n## 开始任务\n",
+            agents,
+        )
 
     def test_init_is_idempotent_and_preserves_user_content(self) -> None:
         initialize_project(self.root)
@@ -439,14 +449,15 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertEqual(result["planned"], [])
         self.assertIn("`<!--`", agents.read_text(encoding="utf-8"))
         self.assertEqual(claude.read_text(encoding="utf-8").count("@AGENTS.md"), 1)
-        self.assertEqual(project.read_text(encoding="utf-8").count("## 当前长期规则"), 1)
-        self.assertEqual(project.read_text(encoding="utf-8").count("## 项目结构与入口"), 1)
+        self.assertEqual(
+            project.read_text(encoding="utf-8"),
+            "# Existing\n\nUse the inline code `<!--` to describe an HTML comment.\n",
+        )
 
     def test_init_rejects_unclosed_fences_before_writing(self) -> None:
         cases = {
             "agents": ("AGENTS.md", "```markdown\nunfinished\n"),
             "claude": ("CLAUDE.md", "~~~text\nunfinished\n"),
-            "project": ("agent-docs/project.md", "# Project\n\n```\nunfinished\n"),
         }
         for name, (relative, content) in cases.items():
             with self.subTest(name=name):
@@ -469,7 +480,6 @@ class ProjectContinuityTests(unittest.TestCase):
         cases = {
             "agents": ("AGENTS.md", "# Existing\n\n<!-- unfinished\n"),
             "claude": ("CLAUDE.md", "# Existing\n\n<!-- unfinished\n"),
-            "project": ("agent-docs/project.md", "# Project\n\n<!-- unfinished\n"),
         }
         for name, (relative, content) in cases.items():
             with self.subTest(name=name):
@@ -488,48 +498,13 @@ class ProjectContinuityTests(unittest.TestCase):
                 if relative != "CLAUDE.md":
                     self.assertFalse((target / "CLAUDE.md").exists())
 
-    def test_init_adds_missing_rule_section_without_rewriting_project_content(self) -> None:
-        project = self.write(
-            "agent-docs/project.md",
-            "# Existing Project\n\nUSER PROJECT FACT\n\n## 项目结构与入口\n\nExisting structure.\n",
-        )
-
-        initialize_project(self.root)
-        initialize_project(self.root)
-
-        text = project.read_text(encoding="utf-8")
-        self.assertIn("USER PROJECT FACT", text)
-        self.assertEqual(text.count("## 当前长期规则"), 1)
-        self.assertEqual(text.count("## 项目结构与入口"), 1)
-
-    def test_project_sections_ignore_html_comments(self) -> None:
+    def test_init_never_rewrites_existing_project_content(self) -> None:
         project = self.write(
             "agent-docs/project.md",
             (
-                "# Existing Project\n\n"
-                "<!--\n"
-                "## 当前长期规则\n"
-                "## 项目结构与入口\n"
-                "-->\n"
-            ),
-        )
-
-        initialize_project(self.root)
-        initialize_project(self.root)
-
-        text = project.read_text(encoding="utf-8")
-        self.assertEqual(text.count("## 当前长期规则"), 2)
-        self.assertEqual(text.count("## 项目结构与入口"), 2)
-        self.assertTrue(continuity_core._has_markdown_heading(text, "## 当前长期规则"))
-        self.assertTrue(continuity_core._has_markdown_heading(text, "## 项目结构与入口"))
-
-    def test_project_sections_accept_valid_atx_heading_variants(self) -> None:
-        project = self.write(
-            "agent-docs/project.md",
-            (
-                "# Existing Project\n\n"
-                "   ##\t当前长期规则 ##\n\nExisting rules.\n\n"
-                " ##  项目结构与入口 ###\n\nExisting structure.\n"
+                "# SemGuard Project\n\n"
+                "## 项目规则\n\nUSER PROJECT FACT\n\n"
+                "## 项目入口\n\nExisting structure.\n"
             ),
         )
         original = project.read_bytes()
@@ -540,6 +515,27 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertNotIn("agent-docs/project.md", first["updated"])
         self.assertEqual(second["planned"], [])
         self.assertEqual(project.read_bytes(), original)
+
+    def test_init_preserves_existing_project_with_unclosed_markdown(self) -> None:
+        project = self.write(
+            "agent-docs/project.md",
+            (
+                "# Existing Project\n\n"
+                "```markdown\nunfinished fence\n\n"
+                "<!-- unfinished comment\n"
+            ),
+        )
+        original = project.read_bytes()
+
+        first = initialize_project(self.root)
+        second = initialize_project(self.root)
+
+        self.assertNotIn("agent-docs/project.md", first["updated"])
+        self.assertEqual(second["planned"], [])
+        self.assertEqual(project.read_bytes(), original)
+        self.assertTrue((self.root / "AGENTS.md").exists())
+        self.assertTrue((self.root / "CLAUDE.md").exists())
+        self.assertTrue((self.root / "agent-docs" / "state.md").exists())
 
     def test_init_rejects_corrupt_or_duplicate_managed_markers(self) -> None:
         cases = {
@@ -604,23 +600,23 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertFalse((self.root / "agent-docs").exists())
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits are required for this test")
-    def test_init_preflights_readonly_project_before_any_writes(self) -> None:
+    def test_init_does_not_require_existing_project_to_be_writable(self) -> None:
         agents = self.write("AGENTS.md", "# Existing agents\n\nUSER RULE\n")
         project = self.write("agent-docs/project.md", "# Existing project\n\nPROJECT FACT\n")
-        agents_before = agents.read_bytes()
         project_before = project.read_bytes()
         project.chmod(0o444)
 
         try:
-            with self.assertRaisesRegex(PermissionError, "不可写"):
-                initialize_project(self.root)
+            result = initialize_project(self.root)
         finally:
             project.chmod(0o644)
 
-        self.assertEqual(agents.read_bytes(), agents_before)
+        self.assertIn("AGENTS.md", result["updated"])
+        self.assertIn("CLAUDE.md", result["created"])
+        self.assertIn("agent-docs/state.md", result["created"])
+        self.assertNotIn("agent-docs/project.md", result["planned"])
+        self.assertIn("project-continuity:protocol:start", agents.read_text(encoding="utf-8"))
         self.assertEqual(project.read_bytes(), project_before)
-        self.assertFalse((self.root / "CLAUDE.md").exists())
-        self.assertFalse((self.root / "agent-docs" / "state.md").exists())
 
     def test_init_rolls_back_if_an_atomic_replace_fails(self) -> None:
         agents = self.write("AGENTS.md", "# Existing agents\n\nUSER RULE\n")
@@ -752,7 +748,7 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertFalse((self.root / "AGENTS.md").exists())
         self.assertFalse((self.root / "CLAUDE.md").exists())
 
-    def test_protocol_defines_scoped_lossless_mutations_and_paused_tasks(self) -> None:
+    def test_runtime_protocol_contains_only_executable_continuity_rules(self) -> None:
         agents = (TEMPLATE_ROOT / "AGENTS.block.md").read_text(encoding="utf-8")
         rules = (TEMPLATE_ROOT / "project.rules.md").read_text(encoding="utf-8")
         structure = (TEMPLATE_ROOT / "project.structure.md").read_text(encoding="utf-8")
@@ -761,47 +757,91 @@ class ProjectContinuityTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        self.assertTrue(agents.startswith("## 开始任务\n"))
+        self.assertIn("## 文件职责", agents)
+        self.assertIn("## 信息准入与放置", agents)
+        self.assertIn("## 更新与任务结算", agents)
+        for name in ("project.md", "state.md", "checkpoint.md", "current-decisions.md"):
+            self.assertIn(f"`{name}`", agents)
+        self.assertIn("同一信息只保留一个权威位置", agents)
+        self.assertIn("读取其完整来源", agents)
+        self.assertIn("不因结构完整性而创建空文件", agents)
+        self.assertIn("只清理失效、被替换或重复的信息", agents)
+        self.assertIn(
+            "不得因内容较长、Markdown 篇幅或上下文预算而摘要、压缩、截断或删除仍然有效的信息",
+            agents,
+        )
+        self.assertIn("快速启动依靠权威路由和按需读取完整来源", agents)
+        self.assertIn("项目知识和项目规则写入相应权威位置，不写入本协议区块", agents)
+        self.assertIn("支撑当前阶段判断所需的已核验证据", agents)
+        self.assertIn("新信息默认留在当前对话", agents)
+        self.assertIn("不会因为存在时间长、重复出现、任务完成或模型认为重要而自动成为长期信息", agents)
+        self.assertIn("用户明确确立的项目级跨任务意图", agents)
+        self.assertIn("已从真实来源核验并会影响后续任务的稳定项目事实", agents)
+        self.assertIn("任务完成时结算 checkpoint", agents)
+        self.assertIn("详细结果保留在代码、配置、报告或其他真实权威来源中", agents)
+        self.assertIn("当前有效决定必须跨任务保留", agents)
+        self.assertIn("影响未来判断所需的必要理由、权威依据和失效条件", agents)
         self.assertIn("当前操作、当前任务、当前项目、项目子树还是用户所有项目", agents)
+        self.assertIn("项目级长期意图、规则和稳定事实按准入条件进入 `project.md`", agents)
+        self.assertIn("项目级操作状态进入 `state.md`", agents)
+        self.assertIn("当前任务契约进入 `checkpoint.md`", agents)
+        self.assertIn("符合决定准入条件的当前决定进入 `current-decisions.md`", agents)
+        self.assertIn("只应用作用域覆盖当前任务且会实质影响当前判断的信息", agents)
+        self.assertIn("项目背景不自动成为执行约束", agents)
         self.assertIn("添加", agents)
         self.assertIn("替换", agents)
         self.assertIn("删除", agents)
-        self.assertIn("不因文档较长而压缩", agents)
+        self.assertIn("用户当前明确变更优先于同一作用域的旧用户意图", agents)
+        self.assertIn("已核验的真实项目状态决定当前事实的表述", agents)
+        self.assertIn("同一作用域存在无法判断的冲突", agents)
         self.assertIn("`active` 或 `paused`", agents)
         self.assertIn("另一写任务使用独立 worktree", agents)
-        self.assertIn("不调用 Project Continuity skill", agents)
-        self.assertIn("才重新判断是否持久化", agents)
-        self.assertIn("会影响后续任务的稳定项目事实", agents)
-        self.assertIn("需要跨会话恢复的项目阶段或未完成任务状态", agents)
         self.assertIn("普通讨论、分析、建议、搜索结果和任务输出本身不触发写入", agents)
-        self.assertIn("目标状态与 agent 核验的项目当前事实是不同对象", agents)
-        self.assertIn("核验一致后只保留统一的当前形式", agents)
-        self.assertIn("真实项目状态决定事实表述", agents)
-        self.assertIn("只应用作用域覆盖当前任务且会实质影响当前判断的信息", agents)
-        self.assertIn("修改持久化内容前重新读取目标文件", agents)
-        self.assertIn("写入并重新读取核验成功后", agents)
+        self.assertIn("目标状态与 agent 核验的当前事实是不同对象", agents)
+        self.assertIn("实现完成并核验一致后，只保留统一的当前形式", agents)
+        self.assertIn("持久化修改前重新读取目标文件", agents)
+        self.assertIn("写入后重新读取并核验", agents)
         self.assertIn("明确的持久化请求失败时必须说明", agents)
-        self.assertIn("checkpoint 时，它是该跨会话未完成任务契约的唯一权威", agents)
-        self.assertIn("`state.md` 不重复任务目标、进度、状态或任务级约束", agents)
-        self.assertIn("checkpoint 可额外保存任务目标", agents)
-        self.assertIn("`state.md` 可额外保存项目级阶段", agents)
-        self.assertIn("当前阶段完成条件、简洁当前证据", agents)
-        self.assertIn("不得包含任务目标、任务进度、任务状态或任务级约束", agents)
+        self.assertIn("不保存任务目标、任务进度、任务状态或任务级约束", agents)
         self.assertIn("一个项目级操作性下一步", agents)
-        self.assertIn("一个任务级操作性下一步", agents)
-        self.assertIn("无冲突的 checkpoint 创建/暂停/恢复/完成", agents)
+        self.assertIn("一个任务级下一步", agents)
+        self.assertIn("已能从代码、配置等其他权威来源直接恢复时删除对应条目", agents)
+        self.assertIn("活动 checkpoint 中影响恢复的任务契约", agents)
+        self.assertIn("不把未完成状态或任务级要求升级为长期知识", agents)
+        self.assertNotIn("### 核心边界", agents)
+        self.assertNotIn("Project Continuity 项目连续性协议", agents)
+        self.assertNotIn("Project Continuity", agents)
+        self.assertNotIn("“轻量”", agents)
+        self.assertNotIn("`agent-docs/decisions.md`", agents)
+        self.assertNotIn("`index.md`", agents)
+        self.assertNotIn("`log.md`", agents)
+        self.assertNotIn("RAG", agents)
+        self.assertNotIn("后台", agents)
+        self.assertNotIn("升级旧协议", agents)
+        self.assertNotIn("Project Continuity Skill", agents)
+        self.assertNotIn("$project-continuity", agents)
+        self.assertNotIn("重新运行 `init`", agents)
+        self.assertNotIn("本区块是协议核心", agents)
         self.assertIn("不保留旧值", rules)
         self.assertIn("| 目录或来源 | 权威范围 | 读取或复核条件 |", structure)
-        self.assertIn("项目阶段、焦点、已核验阻塞、当前阶段完成条件、简洁当前证据", state)
+        self.assertIn("`agent-docs/current-decisions.md`", structure)
+        self.assertIn(
+            "项目阶段、焦点、已核验阻塞、当前阶段完成条件、支撑当前阶段判断所需的已核验证据",
+            state,
+        )
         self.assertIn("当前焦点", state)
         self.assertIn("## 当前证据", state)
         self.assertNotIn("## 待清理", state)
         self.assertNotIn("当前任务：", state)
         self.assertNotIn("当前状态：", state)
         self.assertIn("Do not compress valid knowledge", skill)
+        self.assertIn("without limiting Markdown length or valid knowledge capacity", skill)
         self.assertIn("Use a separate worktree", skill)
         self.assertIn("Ordinary discussion, analysis, suggestions, search results", skill)
         self.assertIn("a stable project fact that affects later tasks", skill)
         self.assertIn("unfinished-task state needed across sessions", skill)
+        self.assertIn("Temporary information does not become long-term", skill)
         self.assertIn("Keep a requested target state distinct from the verified current state", skill)
         self.assertIn("keep the unified current form and remove the transitional difference", skill)
         self.assertIn("verified real project state governs statements of current fact", skill)
@@ -811,21 +851,23 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("sole authority for that unfinished task contract", skill)
         self.assertIn("Routine checkpoint lifecycle changes", skill)
         self.assertIn("one project-level operational next action", skill)
-        self.assertIn("phase completion criteria, concise current evidence", skill)
+        self.assertIn(
+            "phase completion criteria, verified evidence needed to support the current phase judgment",
+            skill,
+        )
         self.assertIn("must not contain a task goal, task progress, task status", skill)
         self.assertIn("one task-level operational next action", skill)
-        self.assertIn("Remove the checkpoint recoverably", skill)
+        self.assertIn("On completion, reconcile stable facts and rules", skill)
         self.assertIn("`agent-docs/state.md`", agents)
         self.assertIn("`agent-docs/checkpoint.md`", agents)
         self.assertIn("`agent-docs/state.md`", skill)
-        self.assertIn("`agent-docs/decisions.md`", skill)
-        self.assertIn("`project.md` 登记的当前路由", agents)
-        self.assertIn("创建时必须在 `project.md`", agents)
-        self.assertIn("删除时同步删除该路由", agents)
-        self.assertIn("创建 `agent-docs/decisions.md`", structure)
+        self.assertIn("`agent-docs/current-decisions.md`", skill)
+        self.assertIn("`project.md` 登记的路由", agents)
+        self.assertIn("在 `project.md` 登记其权威范围和读取条件", agents)
+        self.assertIn("同步删除项目路由", agents)
         self.assertIn("registers it as a current authority", skill)
-        self.assertIn("exists without a project route", skill)
-        self.assertIn("remove the file and its project route together", skill)
+        self.assertIn("If legacy `agent-docs/decisions.md` exists", skill)
+        self.assertIn("Never maintain both files", skill)
 
     def test_skill_is_explicit_and_excludes_ordinary_project_work(self) -> None:
         skill_root = PLUGIN_ROOT / "skills" / "project-continuity"
@@ -840,6 +882,9 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("allow_implicit_invocation: false", openai)
         self.assertIn("使用 $project-continuity 接管当前项目", readme)
         self.assertNotIn("使用 project-continuity 接管当前项目", readme)
+        self.assertIn("## 正式运行时协议边界", readme)
+        self.assertIn("是安装到普通项目中的正式运行时协议源码", readme)
+        self.assertIn("本仓库根目录的 `AGENTS.md` 只是 Project Continuity 自身的 dogfooding 实例", readme)
         self.assertIn(
             "Repair a checkpoint whose task contract no longer matches worktree state.",
             plugin["interface"]["defaultPrompt"],
@@ -892,7 +937,7 @@ class ProjectContinuityTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        self.assertEqual(version.stdout.strip(), "project-continuity 0.10.0")
+        self.assertEqual(version.stdout.strip(), "project-continuity 0.11.0")
         self.assertEqual(removed.returncode, 2)
         self.assertIn("invalid choice", removed.stderr)
 
@@ -916,7 +961,7 @@ class ProjectContinuityTests(unittest.TestCase):
 
         payload = json.loads(completed.stdout)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["protocol_version"], "0.10.0")
+        self.assertEqual(payload["protocol_version"], "0.11.0")
         self.assertEqual(
             payload["created"],
             ["AGENTS.md", "CLAUDE.md", "agent-docs/project.md", "agent-docs/state.md"],
@@ -956,6 +1001,7 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertFalse((PLUGIN_ROOT / "skills" / "project-continuity" / "references").exists())
         self.assertFalse((TEMPLATE_ROOT / "index.block.md").exists())
         self.assertFalse((TEMPLATE_ROOT / "checkpoint.md").exists())
+        self.assertFalse((TEMPLATE_ROOT / "current-decisions.md").exists())
 
     def test_version_metadata_is_consistent(self) -> None:
         pyproject = (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -970,9 +1016,9 @@ class ProjectContinuityTests(unittest.TestCase):
         skill = (skill_root / "SKILL.md").read_text(encoding="utf-8")
         openai = (skill_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
-        self.assertEqual(PROTOCOL_VERSION, "0.10.0")
+        self.assertEqual(PROTOCOL_VERSION, "0.11.0")
         self.assertIn('name = "project-continuity"', pyproject)
-        self.assertIn('version = "0.10.0"', pyproject)
+        self.assertIn('version = "0.11.0"', pyproject)
         self.assertIn("https://github.com/yx-yuu/Project-Continuity", pyproject)
         self.assertIn("github.com/yx-yuu/Project-Continuity.git", readme)
         self.assertIn(
@@ -980,7 +1026,7 @@ class ProjectContinuityTests(unittest.TestCase):
             pyproject,
         )
         self.assertEqual(plugin["name"], "project-continuity")
-        self.assertTrue(plugin["version"].startswith("0.10.0+codex."))
+        self.assertTrue(plugin["version"].startswith("0.11.0+codex."))
         self.assertEqual(
             marketplace["plugins"],
             [
@@ -1034,7 +1080,7 @@ class ProjectContinuityTests(unittest.TestCase):
     @unittest.skipIf(sys.version_info < (3, 11), "verify_release_tag uses stdlib tomllib")
     def test_release_tag_verifier_matches_project_version(self) -> None:
         valid = subprocess.run(
-            [sys.executable, str(REPOSITORY_ROOT / "scripts" / "verify_release_tag.py"), "v0.10.0"],
+            [sys.executable, str(REPOSITORY_ROOT / "scripts" / "verify_release_tag.py"), "v0.11.0"],
             check=False,
             capture_output=True,
             text=True,
@@ -1050,7 +1096,7 @@ class ProjectContinuityTests(unittest.TestCase):
 
         self.assertEqual(valid.returncode, 0, valid.stderr)
         self.assertEqual(invalid.returncode, 2)
-        self.assertIn("release tag 必须是 v0.10.0", invalid.stderr)
+        self.assertIn("release tag 必须是 v0.11.0", invalid.stderr)
 
     def test_wheel_verifier_enforces_complete_current_package(self) -> None:
         script_root = PLUGIN_ROOT / "scripts"
@@ -1073,11 +1119,11 @@ class ProjectContinuityTests(unittest.TestCase):
         def build_fixture(
             path: Path,
             names: set[str] | None = None,
-            dist_info: str = "project_continuity-0.10.0.dist-info",
+            dist_info: str = "project_continuity-0.11.0.dist-info",
             metadata: str | None = (
                 "Metadata-Version: 2.4\n"
                 "Name: project-continuity\n"
-                "Version: 0.10.0\n"
+                "Version: 0.11.0\n"
             ),
             wheel_metadata: str | None = (
                 "Wheel-Version: 1.0\n"
@@ -1147,7 +1193,7 @@ class ProjectContinuityTests(unittest.TestCase):
         )
         build_fixture(
             fixtures["wrong-project-dist-info"],
-            dist_info="other_project-0.10.0.dist-info",
+            dist_info="other_project-0.11.0.dist-info",
         )
         build_fixture(fixtures["missing-metadata"], metadata=None)
         build_fixture(fixtures["missing-wheel-metadata"], wheel_metadata=None)
@@ -1158,7 +1204,7 @@ class ProjectContinuityTests(unittest.TestCase):
         )
         build_fixture(
             fixtures["wrong-metadata-name"],
-            metadata="Metadata-Version: 2.4\nName: other-project\nVersion: 0.10.0\n",
+            metadata="Metadata-Version: 2.4\nName: other-project\nVersion: 0.11.0\n",
         )
         build_fixture(
             fixtures["wrong-metadata-version"],
@@ -1219,7 +1265,7 @@ class ProjectContinuityTests(unittest.TestCase):
         )
 
         payload = json.loads(completed.stdout)
-        self.assertEqual(payload["protocol_version"], "0.10.0")
+        self.assertEqual(payload["protocol_version"], "0.11.0")
         self.assertTrue((target / "agent-docs" / "project.md").is_file())
 
 

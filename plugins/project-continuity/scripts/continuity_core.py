@@ -10,7 +10,7 @@ from pathlib import Path
 from string import Template
 
 
-PROTOCOL_VERSION = "0.10.0"
+PROTOCOL_VERSION = "0.11.0"
 CURRENT_MARKER_NAMESPACE = "project-continuity"
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_ROOT = PLUGIN_ROOT / "assets" / "project-template"
@@ -353,48 +353,6 @@ def _claude_adapter_text(existing: str | None, body: str) -> str:
     )
 
 
-def _has_markdown_heading(text: str, heading: str) -> bool:
-    expected = _atx_heading(heading)
-    if expected is None:
-        raise ValueError(f"无效的 Markdown 标题: {heading}")
-    for line in _active_markdown_lines(text):
-        if _atx_heading(line) == expected:
-            return True
-    return False
-
-
-def _atx_heading(line: str) -> tuple[int, str] | None:
-    stripped = line.lstrip(" ")
-    if len(line) - len(stripped) > 3 or not stripped.startswith("#"):
-        return None
-    level = len(stripped) - len(stripped.lstrip("#"))
-    if level > 6:
-        return None
-    remainder = stripped[level:]
-    if remainder and remainder[0] not in " \t":
-        return None
-    content = remainder.strip(" \t")
-    closing_start = len(content.rstrip("#"))
-    if closing_start < len(content) and (
-        closing_start == 0 or content[closing_start - 1] in " \t"
-    ):
-        content = content[:closing_start].rstrip(" \t")
-    return level, content
-
-
-def _project_with_missing_sections(text: str, rules: str, structure: str) -> str:
-    additions = []
-    if not _has_markdown_heading(text, "## 当前长期规则"):
-        additions.append(rules.rstrip())
-    if not _has_markdown_heading(text, "## 项目结构与入口"):
-        additions.append(structure.rstrip())
-    if additions:
-        newline = _preferred_newline(text)
-        addition = (newline * 2).join(_with_newlines(item, newline) for item in additions)
-        return _append_block(text, addition, newline)
-    return text
-
-
 _WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
 _EXECUTE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
 
@@ -618,9 +576,6 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
         }
         _validate_managed_text(agents_path, existing_contents[agents_path], "protocol")
         _validate_managed_text(claude_path, existing_contents[claude_path], "claude-adapter")
-        project_text = existing_contents[project_path]
-        if project_text is not None:
-            _validate_markdown_constructs(project_path, project_text)
 
         existing_agent_docs = sorted(path.name for path in docs.glob("*.md")) if docs.is_dir() else []
         mode = (
@@ -644,7 +599,7 @@ def initialize_project(root: Path, project_name: str | None = None, dry_run: boo
             project_path: (
                 project_template
                 if existing_contents[project_path] is None
-                else _project_with_missing_sections(existing_contents[project_path], rules, structure)
+                else existing_contents[project_path]
             ),
             state_path: state_template if existing_contents[state_path] is None else existing_contents[state_path],
         }

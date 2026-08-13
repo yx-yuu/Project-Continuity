@@ -5,27 +5,27 @@ description: Maintain or repair a project's lightweight Markdown continuity cont
 
 # Project Continuity
 
-Maintain current user intent, project knowledge, authority routes, and unfinished task state without controlling how the agent performs project work. Keep the mechanism simple even when the project's valid knowledge is extensive.
+Maintain current user intent, project knowledge, authority routes, current decisions, and unfinished task state without controlling how the agent performs project work. Keep the structure and mechanism simple without limiting Markdown length or valid knowledge capacity.
 
 ## Adopt A Project
 
 1. Run `project-continuity init <root> --dry-run --json`, inspect the small set of protocol files it will touch, then run `project-continuity init <root>`.
 2. Read existing instructions, current-status material, project documentation, top-level responsibilities, and code or configuration entrypoints needed to identify current authorities. Inspect real sources with the tools appropriate to the project; do not build a parallel inventory.
-3. Preserve complete valid knowledge. Put current project definitions, constraints, user rules, and authority routes in `agent-docs/project.md`; put only the project-level phase, focus, verified blockers, phase completion criteria, concise current evidence, and one operational next action in `agent-docs/state.md`. Create `agent-docs/checkpoint.md` only when an unfinished task must survive the current session.
+3. Preserve complete valid knowledge. Put current project definitions, constraints, user rules, and authority routes in `agent-docs/project.md`; put only the project-level phase, focus, verified blockers, phase completion criteria, verified evidence needed to support the current phase judgment, and one operational next action in `agent-docs/state.md`. Create `agent-docs/checkpoint.md` only when an unfinished task must survive the current session, and create `agent-docs/current-decisions.md` only when a current decision's minimum rationale or invalidation condition must remain available across tasks and cannot be recovered from another authority.
 4. Treat model inference and unverified output as candidates. Ask only when an unresolved authority or scope decision would materially affect future work.
 
 ## Restore Context
 
 1. Read the nearest Project Continuity-managed `AGENTS.md`, then `agent-docs/project.md` and `agent-docs/state.md`.
-2. Read `agent-docs/checkpoint.md` when it exists and treat it as the sole authority for that unfinished task contract; do not let `state.md` duplicate or override its task goal, progress, status, or constraints. Read `agent-docs/decisions.md` only when `project.md` registers it as a current authority relevant to the task.
+2. Read `agent-docs/checkpoint.md` when it exists and treat it as the sole authority for that unfinished task contract; do not let `state.md` duplicate or override its task goal, progress, status, or constraints. Read `agent-docs/current-decisions.md` only when `project.md` registers it as a current authority relevant to the task.
 3. Follow only authority routes relevant to the task, then read those complete sources. Apply stored information only when its scope covers the task and it materially changes the current decision; project background is not automatically an execution constraint.
 4. Treat summaries, native memory, unverified outputs, and old documents as hints rather than current authority.
 
 ## Admit A Persistent Change
 
-Re-evaluate persistence only when the user explicitly asks to remember or follow something across tasks, adds, corrects, or repeals cross-task information, the agent verifies a stable project fact that affects later tasks, a project phase or unfinished-task state needed across sessions changes, or a checkpoint lifecycle event occurs. Ordinary discussion, analysis, suggestions, search results, and task output do not trigger writes by themselves.
+Re-evaluate persistence only when the user explicitly asks to remember or follow something across tasks, adds, corrects, or repeals cross-task information, the agent verifies a stable project fact that affects later tasks, a project phase or unfinished-task state needed across sessions changes, or a checkpoint or current-decision lifecycle event occurs. Ordinary discussion, analysis, suggestions, search results, and task output do not trigger writes by themselves. Temporary information does not become long-term merely because it is old, repeated, produced by a completed task, or judged important by the model.
 
-Persist as project authority only direct user intent and agent-verified project facts. `state.md` may additionally hold the project-level phase, focus, verified blockers, phase completion criteria, concise current evidence, and one project-level operational next action; it must not contain a task goal, task progress, task status, or task-level constraints. A checkpoint may additionally hold the task goal, user-provided task constraints, verified progress and blockers, and one task-level operational next action. Keep both kinds of operational state out of project knowledge. Keep a requested target state distinct from the verified current state when they differ; neither replaces the other merely because both concern the same project. After implementation makes them agree and verification succeeds, keep the unified current form and remove the transitional difference. Reject model inference and unverified external content from current authority, and never put secrets, credentials, or personal data in the control plane.
+Persist as project authority only direct user intent and agent-verified project facts. `state.md` may additionally hold the project-level phase, focus, verified blockers, phase completion criteria, verified evidence needed to support the current phase judgment, and one project-level operational next action; it must not contain a task goal, task progress, task status, or task-level constraints. A checkpoint may additionally hold the task goal, user-provided task constraints, verified progress and blockers, and one task-level operational next action. A current decision belongs in `current-decisions.md` only when future judgment still needs its scope, minimum rationale, authority, or invalidation condition; ordinary recoverable facts stay in `project.md` or their real authority. Keep operational state out of project knowledge. Keep a requested target state distinct from the verified current state when they differ; neither replaces the other merely because both concern the same project. After implementation makes them agree and verification succeeds, keep the unified current form and remove the transitional difference. Reject model inference and unverified external content from current authority, and never put secrets, credentials, or personal data in the control plane.
 
 ## Resolve Scope And Authority
 
@@ -56,13 +56,13 @@ Use this section when the skill was explicitly invoked to repair or reconcile a 
 - Pause without deleting the checkpoint; record verified progress, user-provided task constraints, verified blockers, and one next action.
 - Handle read-only work without replacing the checkpoint.
 - Use a separate worktree for another mutating task; each worktree keeps its own checkpoint.
-- Remove the checkpoint recoverably only after completion or explicit abandonment, then reconcile affected current project information.
+- On completion, reconcile stable facts and rules into `project.md`, project-level phase changes into `state.md`, decisions whose rationale or invalidation condition must survive into `current-decisions.md`, and detailed results into their real authority; then remove the checkpoint recoverably.
 
 Do not create a checkpoint for small work that can finish in the current context.
 
 ## Repair The Control Plane
 
-Inspect actual project state rather than relying on continuity summaries. Reconcile only confirmed current definitions, knowledge, constraints, routes, and task state. If `agent-docs/decisions.md` exists without a project route, validate its current decisions, then register the current authority or remove the obsolete file recoverably. Create `agent-docs/decisions.md` only when an effective decision, its minimum reason, and its invalidation condition must survive to prevent repeated error; register its authority and scope in `agent-docs/project.md` at the same time. When no current decision requires it, remove the file and its project route together.
+Inspect actual project state rather than relying on continuity summaries. Reconcile only confirmed current definitions, knowledge, constraints, routes, decisions, and task state. Create `agent-docs/current-decisions.md` only when an effective decision, its scope, minimum rationale, authority, and invalidation condition must survive to prevent future error; register its authority and reading condition in `agent-docs/project.md` at the same time. When no current decision requires it, remove the file recoverably and delete its project route together. If legacy `agent-docs/decisions.md` exists, treat it as an upgrade candidate rather than current authority: validate each still-effective decision, migrate only content admitted by the current rules, update routes, and remove the legacy file recoverably. Never maintain both files.
 
 ## Preserve The Boundary
 
