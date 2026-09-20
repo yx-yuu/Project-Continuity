@@ -880,11 +880,14 @@ class ProjectContinuityTests(unittest.TestCase):
         self.assertIn("routine checkpoint creation, pause, resume, and completion", skill)
         self.assertNotIn("pausing, resuming, switching, or completing", skill.split("---", 2)[1])
         self.assertIn("allow_implicit_invocation: false", openai)
-        self.assertIn("使用 $project-continuity 接管当前项目", readme)
-        self.assertNotIn("使用 project-continuity 接管当前项目", readme)
-        self.assertIn("## 正式运行时协议边界", readme)
-        self.assertIn("是安装到普通项目中的正式运行时协议源码", readme)
-        self.assertIn("本仓库根目录的 `AGENTS.md` 只是 Project Continuity 自身的 dogfooding 实例", readme)
+        self.assertIn("Take over the current project with $project-continuity", readme)
+        self.assertNotIn("Take over the current project with project-continuity", readme)
+        self.assertIn("## Official runtime protocol boundary", readme)
+        self.assertIn("is the official runtime protocol source installed into ordinary projects", readme)
+        self.assertIn(
+            "the `AGENTS.md` at this repository's root is only Project Continuity's own dogfooding instance",
+            readme,
+        )
         self.assertIn(
             "Repair a checkpoint whose task contract no longer matches worktree state.",
             plugin["interface"]["defaultPrompt"],
@@ -894,12 +897,12 @@ class ProjectContinuityTests(unittest.TestCase):
     def test_readme_has_a_copyable_codex_install_prompt(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn("### 最简单：把下面整段发给 Codex", readme)
+        self.assertIn("### Simplest: send the whole block below to Codex", readme)
         self.assertIn("uv tool install --force git+https://github.com/yx-yuu/Project-Continuity.git", readme)
         self.assertIn("codex plugin marketplace add yx-yuu/Project-Continuity --ref main", readme)
         self.assertIn("codex plugin add project-continuity@personal", readme)
-        self.assertIn("不要初始化或修改当前项目", readme)
-        self.assertIn("project-continuity@personal` 是 installed、enabled", readme)
+        self.assertIn("Do not initialize or modify the current project", readme)
+        self.assertIn("shows `project-continuity@personal` as installed and enabled", readme)
 
     def test_existing_complete_knowledge_is_not_rewritten_or_truncated(self) -> None:
         knowledge = "\n".join(f"CURRENT KNOWLEDGE {index}" for index in range(500))
